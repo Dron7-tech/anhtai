@@ -50,12 +50,30 @@ class AppealView(discord.ui.View):
     @discord.ui.button(label="📝 Gửi Kháng Cáo", style=discord.ButtonStyle.primary, custom_id="btn_khang_cao")
     async def btn_khang_cao(self, interaction: discord.Interaction, button: discord.ui.Button):
         data = load_data()
-        if str(interaction.user.id) not in data:
+        uid_str = str(interaction.user.id)
+        
+        if uid_str not in data:
             try: await interaction.response.send_message("❌ Bạn không phải là tù nhân, kháng cáo gì tầm này?", ephemeral=True)
             except Exception: pass
             return
+            
+        # Kiểm tra xem đã kháng cáo chưa
+        if data[uid_str].get("appealed", False):
+            try: await interaction.response.send_message("❌ Bạn đã sử dụng hết quyền kháng cáo (chỉ được 1 lần duy nhất)!", ephemeral=True)
+            except Exception: pass
+            return
+            
+        # Cập nhật trạng thái đã kháng cáo
+        data[uid_str]["appealed"] = True
+        save_data(data)
         
         try: await interaction.response.send_message("✅ Đơn kháng cáo đã được gửi tới hội đồng quản trị!", ephemeral=True)
+        except Exception: pass
+        
+        # Sửa lại nút bấm thành vô hiệu hóa ngay lập tức cho người dùng nhìn thấy
+        button.disabled = True
+        button.label = "Đã Kháng Cáo"
+        try: await interaction.message.edit(view=self)
         except Exception: pass
         
         channel = interaction.guild.get_channel(CHANNEL_NHA_TU)
@@ -96,15 +114,11 @@ def setup_nhatu(bot):
             return
 
         try:
-            # Sao lưu role cũ (Bỏ qua @everyone và role Tù Nhân cũ nếu có)
             old_roles = [r.id for r in member.roles if r.name != "@everyone" and r.id != ROLE_TU_NHAN]
-            
-            # Gỡ tất cả role cũ của người đó
             roles_to_remove = [r for r in member.roles if r.name != "@everyone"]
             if roles_to_remove:
                 await member.remove_roles(*roles_to_remove)
             
-            # Gán role Tù Nhân
             tu_nhan_role = ctx.guild.get_role(ROLE_TU_NHAN)
             if tu_nhan_role:
                 await member.add_roles(tu_nhan_role)
@@ -114,16 +128,15 @@ def setup_nhatu(bot):
             except Exception: pass
             return
 
-        # Lưu dữ liệu vào file JSON
         end_time = time.time() + duration
         jail_data[str(member.id)] = {
             "end_time": end_time,
             "old_roles": old_roles,
-            "reason": li_do
+            "reason": li_do,
+            "appealed": False  # Trạng thái kháng cáo mặc định là Chưa dùng
         }
         save_data(jail_data)
 
-        # Thông báo Embed
         embed = discord.Embed(title="🚨 LỆNH BẮT GIỮ 🚨", color=discord.Color.dark_red())
         embed.add_field(name="Tội phạm", value=member.mention, inline=True)
         embed.add_field(name="Người bắt", value=ctx.author.mention, inline=True)
@@ -187,7 +200,51 @@ def setup_nhatu(bot):
             except Exception: pass
 
     @bot.command()
-    async def kiemtratu(ctx):
+    async def kiemtratu(ctx, member: discord.Member = None):
+        # Admin đang kiểm tra một người khác
+        if member and member.id != ctx.author.id:
+            if not is_admin(ctx.author):
+                try: await ctx.send("❌ Bạn không có quyền kiểm tra hồ sơ tù nhân của người khác!")
+                except Exception: pass
+                return
+                
+            uid = str(member.id)
+            if uid not in jail_data:
+                try: await ctx.send(f"✅ {member.display_name} hiện không có trong danh sách đen!")
+                except Exception: pass
+                return
+                
+            info = jail_data[uid]
+            remaining = int(info["end_time"] - time.time())
+            
+            if remaining <= 0:
+                try: await ctx.send(f"🕊️ Mức án của {member.display_name} đã hết! Hệ thống đang chuẩn bị thả người.")
+                except Exception: pass
+                return
+                
+            m, s = divmod(remaining, 60)
+            h, m = divmod(m, 60)
+            d, h = divmod(h, 24)
+            
+            time_str = ""
+            if d > 0: time_str += f"{d} ngày "
+            if h > 0: time_str += f"{h} giờ "
+            if m > 0: time_str += f"{m} phút "
+            if s > 0: time_str += f"{s} giây"
+            
+            appealed_status = "Đã sử dụng" if info.get("appealed", False) else "Chưa sử dụng"
+            
+            embed = discord.Embed(title=f"⏳ HỒ SƠ ÁN PHẠT: {member.display_name}", color=discord.Color.dark_grey())
+            embed.add_field(name="Lý do phạm tội", value=info["reason"], inline=False)
+            embed.add_field(name="Thời gian còn lại", value=f"**{time_str.strip()}**", inline=False)
+            embed.add_field(name="Quyền kháng cáo", value=appealed_status, inline=False)
+            
+            # Admin kiểm tra thì không hiện nút bấm kháng cáo
+            try: await ctx.send(embed=embed)
+            except Exception: pass
+            return
+
+        # Tù nhân tự kiểm tra bản thân
         uid = str(ctx.author.id)
         if uid not in jail_data:
             try: await ctx.send("✅ Bạn đang là công dân lương thiện, không vướng bận lao lý!")
@@ -212,14 +269,27 @@ def setup_nhatu(bot):
         if m > 0: time_str += f"{m} phút "
         if s > 0: time_str += f"{s} giây"
         
+        da_khang_cao = info.get("appealed", False)
+        appealed_status = "Đã dùng (Hết quyền)" if da_khang_cao else "Còn 1 lần"
+        
         embed = discord.Embed(title="⏳ THÔNG TIN ÁN PHẠT", color=discord.Color.dark_grey())
         embed.add_field(name="Lý do phạm tội", value=info["reason"], inline=False)
         embed.add_field(name="Thời gian còn lại", value=f"**{time_str.strip()}**", inline=False)
+        embed.add_field(name="Trạng thái kháng cáo", value=appealed_status, inline=False)
         
-        try: await ctx.send(embed=embed, view=AppealView())
+        # Ẩn hoàn toàn nút gửi nếu đã kháng cáo
+        view_to_send = None if da_khang_cao else AppealView()
+        
+        try: await ctx.send(embed=embed, view=view_to_send)
         except Exception: pass
 
-    # Tiến trình ngầm tự động quét và ân xá mỗi 15 giây
+
+    @bot.listen("on_ready")
+    async def start_jail_loop():
+        if not check_jail_loop.is_running():
+            check_jail_loop.start()
+            print("✅ Vòng lặp Nhà Tù đã khởi động an toàn!")
+
     @tasks.loop(seconds=15)
     async def check_jail_loop():
         now = time.time()
@@ -252,10 +322,3 @@ def setup_nhatu(bot):
             del jail_data[uid]
         if to_remove:
             save_data(jail_data)
-
-    # ĐÂY LÀ ĐIỂM SỬA LỖI: Dùng event listener thay vì gọi trực tiếp
-    @bot.listen("on_ready")
-    async def start_jail_loop():
-        if not check_jail_loop.is_running():
-            check_jail_loop.start()
-            print("✅ Vòng lặp Nhà Tù đã khởi động an toàn!")
