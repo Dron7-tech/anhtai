@@ -169,8 +169,8 @@ class LuotCoQuayNga(discord.ui.View):
     def __init__(self, danh_sach, vi_tri, so_lo, vien, channel_id):
         super().__init__(timeout=None)
         self.danh_sach = danh_sach
-        self.vi_tri = vi_tri
-        self.so_lo = so_lo
+        # Không dùng vi_tri nữa, thay vào đó dùng so_lo và vien để tính % nổ
+        self.so_lo = so_lo 
         self.vien = vien
         self.channel_id = channel_id
 
@@ -183,19 +183,30 @@ class LuotCoQuayNga(discord.ui.View):
         else:
             try: await interaction.response.defer()
             except Exception: pass
+            
             for child in self.children: child.disabled = True
             embed = interaction.message.embeds[0]
             embed.color = discord.Color.dark_red()
-            embed.description = f"🥶 {nguoi_dang_cam.mention} toát mồ hôi lạnh, từ từ kê nòng súng sát vào thái dương..."
+            
+            # Tính toán xác suất nổ dựa trên viên đạn hiện tại
+            so_lo_con_lai = self.so_lo - self.vien + 1
+            ty_le_chet_phan_tram = round((1 / so_lo_con_lai) * 100, 1)
+            
+            embed.description = f"🥶 {nguoi_dang_cam.mention} toát mồ hôi lạnh, từ từ kê nòng súng sát vào thái dương...\n*(Tỷ lệ đạn nổ ở lượt này là: **{ty_le_chet_phan_tram}%**)*"
             try: await interaction.edit_original_response(embed=embed, view=self)
             except Exception: pass
             await asyncio.sleep(1.5)
-            embed.description = f"🤞 Khẽ nhắm chặt mắt... {nguoi_dang_cam.mention} siết cò..."
+            
+            embed.description = f"🤞 Khẽ nhắm chặt mắt... {nguoi_dang_cam.mention} siết cò...\n*(Tỷ lệ đạn nổ ở lượt này là: **{ty_le_chet_phan_tram}%**)*"
             try: await interaction.edit_original_response(embed=embed)
             except Exception: pass
             await asyncio.sleep(2.5)
 
-            if self.vien == self.vi_tri:
+            # Thuật toán quay Random theo tỷ lệ
+            # random.randint(1, so_lo_con_lai) == 1 mô phỏng chính xác việc 1 viên đạn trong số các lỗ còn lại
+            is_dead = (random.randint(1, so_lo_con_lai) == 1)
+
+            if is_dead:
                 ds_song = [p for p in self.danh_sach if p != nguoi_dang_cam]
                 chuoi_song = ", ".join([p.mention for p in ds_song])
                 embed.description = f"💥 **ĐÙNG!!!** 💥\n\n🩸 Máu văng tung tóe!\n💀 {nguoi_dang_cam.mention} gục xuống hoàn toàn...\n\n🏆 **NHỮNG NGƯỜI SỐNG SÓT:**\n{chuoi_song}"
@@ -318,7 +329,7 @@ async def on_ready():
 
 @bot.command()
 async def ver(ctx):
-    try: await ctx.send("🤖 Phiên bản hiện tại của bot: **0.70**")
+    try: await ctx.send("🤖 Phiên bản hiện tại của bot: **0.71**")
     except Exception: pass
 
 # ==========================================
