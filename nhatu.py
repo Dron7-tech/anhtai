@@ -9,18 +9,70 @@ CHANNEL_NHA_TU = 1552432404730486864
 ADMIN_ROLES = [1438895205012082812, 1438865272315445258]
 DATA_FILE = "jail_data.json"
 
-def load_data():
-    if os.path.exists(DATA_FILE):
+# Biến bộ nhớ lưu trữ Cloud Database
+JAIL_DATA = {}
+DB_MESSAGE_ID = None
+DB_LOADED = False
+
+async def load_cloud_db(bot):
+    global DB_MESSAGE_ID, JAIL_DATA, DB_LOADED
+    if DB_LOADED: return
+    
+    # Quét Discord để tìm dữ liệu sao lưu chống mất khi Update Render
+    channel = bot.get_channel(CHANNEL_NHA_TU)
+    if channel:
+        try:
+            async for msg in channel.history(limit=100):
+                if msg.author == bot.user and "🔒 [DATABASE_NHA_TU]" in msg.content:
+                    DB_MESSAGE_ID = msg.id
+                    try:
+                        json_str = msg.content.split("```json\n")[1].split("\n```")[0]
+                        JAIL_DATA.update(json.loads(json_str))
+                        print("✅ Đã khôi phục dữ liệu Nhà tù từ Discord Cloud Database!")
+                    except Exception: pass
+                    break
+        except Exception: pass
+
+    # Nếu trên Kênh không có thì load bằng File Local
+    if not DB_MESSAGE_ID and os.path.exists(DATA_FILE):
         try:
             with open(DATA_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
+                JAIL_DATA.update(json.load(f))
+                print("✅ Đã load dữ liệu Nhà tù từ Local File!")
         except Exception: pass
-    return {}
+    DB_LOADED = True
 
-def save_data(data):
+async def save_cloud_db(bot):
+    global DB_MESSAGE_ID
+    # Lưu xuống ổ cứng local
     try:
         with open(DATA_FILE, "w", encoding="utf-8") as f:
-            json.dump(data, f, indent=4)
+            json.dump(JAIL_DATA, f, indent=4)
+    except Exception: pass
+
+    # Lưu lên Discord Kênh Nhà Tù để làm Cloud Database
+    channel = bot.get_channel(CHANNEL_NHA_TU)
+    if not channel: return
+    
+    content = f"🔒 [DATABASE_NHA_TU] - Bot lưu trữ dữ liệu tự động để chống mất thông tin khi update. Vui lòng không xóa tin nhắn này!\n```json\n{json.dumps(JAIL_DATA)}\n```"
+    
+    if DB_MESSAGE_ID:
+        try:
+            msg = await channel.fetch_message(DB_MESSAGE_ID)
+            await msg.edit(content=content)
+            return
+        except Exception:
+            DB_MESSAGE_ID = None
+    
+    try:
+        async for msg in channel.history(limit=100):
+            if msg.author == bot.user and "🔒 [DATABASE_NHA_TU]" in msg.content:
+                await msg.edit(content=content)
+                DB_MESSAGE_ID = msg.id
+                return
+                
+        msg = await channel.send(content)
+        DB_MESSAGE_ID = msg.id
     except Exception: pass
 
 def parse_time(time_str):
@@ -40,37 +92,31 @@ def is_admin(member):
             return True
     return False
 
-# ==========================================
-# NÚT GIAO DIỆN KHÁNG CÁO
-# ==========================================
 class AppealView(discord.ui.View):
-    def __init__(self):
+    def __init__(self, bot):
         super().__init__(timeout=None)
+        self.bot = bot
 
     @discord.ui.button(label="📝 Gửi Kháng Cáo", style=discord.ButtonStyle.primary, custom_id="btn_khang_cao")
     async def btn_khang_cao(self, interaction: discord.Interaction, button: discord.ui.Button):
-        data = load_data()
         uid_str = str(interaction.user.id)
         
-        if uid_str not in data:
+        if uid_str not in JAIL_DATA:
             try: await interaction.response.send_message("❌ Bạn không phải là tù nhân, kháng cáo gì tầm này?", ephemeral=True)
             except Exception: pass
             return
             
-        # Kiểm tra xem đã kháng cáo chưa
-        if data[uid_str].get("appealed", False):
+        if JAIL_DATA[uid_str].get("appealed", False):
             try: await interaction.response.send_message("❌ Bạn đã sử dụng hết quyền kháng cáo (chỉ được 1 lần duy nhất)!", ephemeral=True)
             except Exception: pass
             return
             
-        # Cập nhật trạng thái đã kháng cáo
-        data[uid_str]["appealed"] = True
-        save_data(data)
+        JAIL_DATA[uid_str]["appealed"] = True
+        await save_cloud_db(self.bot)
         
         try: await interaction.response.send_message("✅ Đơn kháng cáo đã được gửi tới hội đồng quản trị!", ephemeral=True)
         except Exception: pass
         
-        # Sửa lại nút bấm thành vô hiệu hóa ngay lập tức cho người dùng nhìn thấy
         button.disabled = True
         button.label = "Đã Kháng Cáo"
         try: await interaction.message.edit(view=self)
@@ -83,12 +129,16 @@ class AppealView(discord.ui.View):
             try: await channel.send(content=pings, embed=embed)
             except Exception: pass
 
-# ==========================================
-# TÍCH HỢP HỆ THỐNG VÀO BOT
-# ==========================================
 def setup_nhatu(bot):
-    jail_data = load_data()
-    bot.add_view(AppealView())
+    bot.add_view(AppealView(bot))
+
+    # Khi bot bật lên, ưu tiên lấy DB từ Discord
+    @bot.listen("on_ready")
+    async def jail_on_ready():
+        await load_cloud_db(bot)
+        if not check_jail_loop.is_running():
+            check_jail_loop.start()
+            print("✅ Vòng lặp Nhà Tù đã khởi động an toàn!")
 
     @bot.command()
     async def jail(ctx, member: discord.Member = None, thoi_gian: str = None, *, li_do: str = "Không có lý do"):
@@ -129,13 +179,13 @@ def setup_nhatu(bot):
             return
 
         end_time = time.time() + duration
-        jail_data[str(member.id)] = {
+        JAIL_DATA[str(member.id)] = {
             "end_time": end_time,
             "old_roles": old_roles,
             "reason": li_do,
-            "appealed": False  # Trạng thái kháng cáo mặc định là Chưa dùng
+            "appealed": False
         }
-        save_data(jail_data)
+        await save_cloud_db(bot)
 
         embed = discord.Embed(title="🚨 LỆNH BẮT GIỮ 🚨", color=discord.Color.dark_red())
         embed.add_field(name="Tội phạm", value=member.mention, inline=True)
@@ -166,12 +216,12 @@ def setup_nhatu(bot):
             return
 
         uid = str(member.id)
-        if uid not in jail_data:
+        if uid not in JAIL_DATA:
             try: await ctx.send(f"⚠️ {member.display_name} hiện đang là công dân tự do, không bị giam giữ!")
             except Exception: pass
             return
 
-        info = jail_data[uid]
+        info = JAIL_DATA[uid]
         
         try:
             tu_nhan_role = ctx.guild.get_role(ROLE_TU_NHAN)
@@ -185,8 +235,8 @@ def setup_nhatu(bot):
             try: await ctx.send(f"⚠️ Đã xảy ra lỗi hệ thống khi gỡ/trả role: {e}")
             except Exception: pass
 
-        del jail_data[uid]
-        save_data(jail_data)
+        del JAIL_DATA[uid]
+        await save_cloud_db(bot)
 
         embed = discord.Embed(title="🕊️ LỆNH ĐẶC XÁ 🕊️", description=f"Quản ngục {ctx.author.mention} đã ký quyết định đặc xá cho {member.mention} trước thời hạn!", color=discord.Color.green())
         embed.set_thumbnail(url=member.display_avatar.url)
@@ -201,7 +251,6 @@ def setup_nhatu(bot):
 
     @bot.command()
     async def kiemtratu(ctx, member: discord.Member = None):
-        # Admin đang kiểm tra một người khác
         if member and member.id != ctx.author.id:
             if not is_admin(ctx.author):
                 try: await ctx.send("❌ Bạn không có quyền kiểm tra hồ sơ tù nhân của người khác!")
@@ -209,12 +258,12 @@ def setup_nhatu(bot):
                 return
                 
             uid = str(member.id)
-            if uid not in jail_data:
+            if uid not in JAIL_DATA:
                 try: await ctx.send(f"✅ {member.display_name} hiện không có trong danh sách đen!")
                 except Exception: pass
                 return
                 
-            info = jail_data[uid]
+            info = JAIL_DATA[uid]
             remaining = int(info["end_time"] - time.time())
             
             if remaining <= 0:
@@ -239,19 +288,17 @@ def setup_nhatu(bot):
             embed.add_field(name="Thời gian còn lại", value=f"**{time_str.strip()}**", inline=False)
             embed.add_field(name="Quyền kháng cáo", value=appealed_status, inline=False)
             
-            # Admin kiểm tra thì không hiện nút bấm kháng cáo
             try: await ctx.send(embed=embed)
             except Exception: pass
             return
 
-        # Tù nhân tự kiểm tra bản thân
         uid = str(ctx.author.id)
-        if uid not in jail_data:
+        if uid not in JAIL_DATA:
             try: await ctx.send("✅ Bạn đang là công dân lương thiện, không vướng bận lao lý!")
             except Exception: pass
             return
             
-        info = jail_data[uid]
+        info = JAIL_DATA[uid]
         remaining = int(info["end_time"] - time.time())
         
         if remaining <= 0:
@@ -277,25 +324,17 @@ def setup_nhatu(bot):
         embed.add_field(name="Thời gian còn lại", value=f"**{time_str.strip()}**", inline=False)
         embed.add_field(name="Trạng thái kháng cáo", value=appealed_status, inline=False)
         
-        # Ẩn hoàn toàn nút gửi nếu đã kháng cáo
-        view_to_send = None if da_khang_cao else AppealView()
+        view_to_send = None if da_khang_cao else AppealView(bot)
         
         try: await ctx.send(embed=embed, view=view_to_send)
         except Exception: pass
-
-
-    @bot.listen("on_ready")
-    async def start_jail_loop():
-        if not check_jail_loop.is_running():
-            check_jail_loop.start()
-            print("✅ Vòng lặp Nhà Tù đã khởi động an toàn!")
 
     @tasks.loop(seconds=15)
     async def check_jail_loop():
         now = time.time()
         to_remove = []
         
-        for uid, info in list(jail_data.items()):
+        for uid, info in list(JAIL_DATA.items()):
             if now >= info["end_time"]:
                 to_remove.append(uid)
                 try:
@@ -319,6 +358,6 @@ def setup_nhatu(bot):
                     print(f"Lỗi ân xá cho {uid}: {e}")
         
         for uid in to_remove:
-            del jail_data[uid]
+            del JAIL_DATA[uid]
         if to_remove:
-            save_data(jail_data)
+            await save_cloud_db(bot)
