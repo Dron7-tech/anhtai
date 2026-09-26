@@ -114,7 +114,7 @@ def setup_nhatu(bot):
             except Exception: pass
             return
 
-        # Lưu dữ liệu vào file JSON để không bị mất khi sập bot
+        # Lưu dữ liệu vào file JSON
         end_time = time.time() + duration
         jail_data[str(member.id)] = {
             "end_time": end_time,
@@ -135,15 +135,11 @@ def setup_nhatu(bot):
         try: await ctx.send(embed=embed)
         except Exception: pass
 
-        # Gửi thêm 1 câu vào kênh nhà tù cho không khí
         jail_channel = ctx.guild.get_channel(CHANNEL_NHA_TU)
         if jail_channel:
             try: await jail_channel.send(f"⛓️ Chào mừng {member.mention} đã đến với nhà đá! Mức án của ngươi là **{thoi_gian}**.")
             except Exception: pass
 
-    # ==========================================
-    # LỆNH ĐẶC XÁ (UNJAIL)
-    # ==========================================
     @bot.command()
     async def unjail(ctx, member: discord.Member = None):
         if not is_admin(ctx.author):
@@ -165,12 +161,10 @@ def setup_nhatu(bot):
         info = jail_data[uid]
         
         try:
-            # Gỡ role tù nhân
             tu_nhan_role = ctx.guild.get_role(ROLE_TU_NHAN)
             if tu_nhan_role and tu_nhan_role in member.roles:
                 await member.remove_roles(tu_nhan_role)
             
-            # Trả lại toàn bộ role cũ cho họ
             roles_to_add = [ctx.guild.get_role(r) for r in info.get("old_roles", []) if ctx.guild.get_role(r)]
             if roles_to_add:
                 await member.add_roles(*roles_to_add)
@@ -178,11 +172,9 @@ def setup_nhatu(bot):
             try: await ctx.send(f"⚠️ Đã xảy ra lỗi hệ thống khi gỡ/trả role: {e}")
             except Exception: pass
 
-        # Xóa hồ sơ phạm nhân khỏi hệ thống
         del jail_data[uid]
         save_data(jail_data)
 
-        # Gửi thông báo đặc xá
         embed = discord.Embed(title="🕊️ LỆNH ĐẶC XÁ 🕊️", description=f"Quản ngục {ctx.author.mention} đã ký quyết định đặc xá cho {member.mention} trước thời hạn!", color=discord.Color.green())
         embed.set_thumbnail(url=member.display_avatar.url)
         
@@ -193,7 +185,6 @@ def setup_nhatu(bot):
         if jail_channel:
             try: await jail_channel.send(embed=embed)
             except Exception: pass
-
 
     @bot.command()
     async def kiemtratu(ctx):
@@ -228,7 +219,6 @@ def setup_nhatu(bot):
         try: await ctx.send(embed=embed, view=AppealView())
         except Exception: pass
 
-
     # Tiến trình ngầm tự động quét và ân xá mỗi 15 giây
     @tasks.loop(seconds=15)
     async def check_jail_loop():
@@ -242,17 +232,14 @@ def setup_nhatu(bot):
                     for guild in bot.guilds:
                         member = guild.get_member(int(uid))
                         if member:
-                            # Gỡ role tù nhân
                             tu_nhan_role = guild.get_role(ROLE_TU_NHAN)
                             if tu_nhan_role in member.roles:
                                 await member.remove_roles(tu_nhan_role)
                             
-                            # Trả lại toàn bộ role cũ cho họ
                             roles_to_add = [guild.get_role(r) for r in info["old_roles"] if guild.get_role(r)]
                             if roles_to_add:
                                 await member.add_roles(*roles_to_add)
                             
-                            # Thông báo thả người
                             jail_channel = guild.get_channel(CHANNEL_NHA_TU)
                             if jail_channel:
                                 embed = discord.Embed(title="🕊️ LỆNH ÂN XÁ 🕊️", description=f"{member.mention} đã mãn hạn tù và được trả tự do! Hãy làm lại cuộc đời.", color=discord.Color.green())
@@ -266,4 +253,9 @@ def setup_nhatu(bot):
         if to_remove:
             save_data(jail_data)
 
-    check_jail_loop.start()
+    # ĐÂY LÀ ĐIỂM SỬA LỖI: Dùng event listener thay vì gọi trực tiếp
+    @bot.listen("on_ready")
+    async def start_jail_loop():
+        if not check_jail_loop.is_running():
+            check_jail_loop.start()
+            print("✅ Vòng lặp Nhà Tù đã khởi động an toàn!")
