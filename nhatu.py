@@ -232,7 +232,7 @@ def setup_nhatu(bot):
         except Exception: pass
 
         jail_channel = ctx.guild.get_channel(CHANNEL_NHA_TU)
-        if jail_channel:
+        if jail_channel and ctx.channel.id != CHANNEL_NHA_TU:
             try: await jail_channel.send(f"⛓️ Chào mừng {member.mention} đã đến với nhà đá! Mức án của ngươi là **{thoi_gian}**.")
             except Exception: pass
 
@@ -274,13 +274,9 @@ def setup_nhatu(bot):
         embed = discord.Embed(title="🕊️ LỆNH ĐẶC XÁ 🕊️", description=f"Quản ngục {ctx.author.mention} đã ký quyết định đặc xá cho {member.mention} trước thời hạn!", color=discord.Color.green())
         embed.set_thumbnail(url=member.display_avatar.url)
         
+        # Chỉ gửi 1 lần vào kênh gõ lệnh hiện tại
         try: await ctx.send(embed=embed)
         except Exception: pass
-        
-        jail_channel = ctx.guild.get_channel(CHANNEL_NHA_TU)
-        if jail_channel:
-            try: await jail_channel.send(embed=embed)
-            except Exception: pass
 
     @bot.command()
     async def kiemtratu(ctx, member: discord.Member = None):
