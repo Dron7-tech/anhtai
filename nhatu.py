@@ -12,66 +12,100 @@ DATA_FILE = "jail_data.json"
 # Biến bộ nhớ lưu trữ Cloud Database
 JAIL_DATA = {}
 DB_MESSAGE_ID = None
+DB_CHANNEL_ID = None
 DB_LOADED = False
+
+async def get_db_channel(bot):
+    global DB_CHANNEL_ID
+    if DB_CHANNEL_ID:
+        return bot.get_channel(DB_CHANNEL_ID)
+
+    # Lấy thông tin Server từ kênh nhà tù
+    jail_channel = bot.get_channel(CHANNEL_NHA_TU)
+    if not jail_channel: return None
+    guild = jail_channel.guild
+
+    # Tìm kênh database ẩn nếu đã có sẵn
+    for channel in guild.text_channels:
+        if channel.name == "database-nhatu":
+            DB_CHANNEL_ID = channel.id
+            return channel
+
+    # Nếu chưa có, tự động tạo kênh ẩn mới
+    overwrites = {
+        guild.default_role: discord.PermissionOverwrite(read_messages=False),
+        guild.me: discord.PermissionOverwrite(read_messages=True, send_messages=True)
+    }
+    for role_id in ADMIN_ROLES:
+        role = guild.get_role(role_id)
+        if role:
+            overwrites[role] = discord.PermissionOverwrite(read_messages=True)
+
+    try:
+        new_channel = await guild.create_text_channel("database-nhatu", overwrites=overwrites, category=jail_channel.category)
+        DB_CHANNEL_ID = new_channel.id
+        return new_channel
+    except Exception as e:
+        print("Lỗi tạo kênh DB:", e)
+        return None
 
 async def load_cloud_db(bot):
     global DB_MESSAGE_ID, JAIL_DATA, DB_LOADED
     if DB_LOADED: return
     
-    # Quét Discord để tìm dữ liệu sao lưu chống mất khi Update Render
-    channel = bot.get_channel(CHANNEL_NHA_TU)
-    if channel:
+    # Quét dữ liệu từ kênh ẩn
+    db_channel = await get_db_channel(bot)
+    if db_channel:
         try:
-            async for msg in channel.history(limit=100):
+            async for msg in db_channel.history(limit=20):
                 if msg.author == bot.user and "🔒 [DATABASE_NHA_TU]" in msg.content:
                     DB_MESSAGE_ID = msg.id
                     try:
                         json_str = msg.content.split("```json\n")[1].split("\n```")[0]
                         JAIL_DATA.update(json.loads(json_str))
-                        print("✅ Đã khôi phục dữ liệu Nhà tù từ Discord Cloud Database!")
+                        print("✅ Đã khôi phục dữ liệu Nhà tù từ Kênh Database Ẩn!")
                     except Exception: pass
                     break
         except Exception: pass
 
-    # Nếu trên Kênh không có thì load bằng File Local
+    # Nếu không có trên mạng, load bằng File Local
     if not DB_MESSAGE_ID and os.path.exists(DATA_FILE):
         try:
             with open(DATA_FILE, "r", encoding="utf-8") as f:
                 JAIL_DATA.update(json.load(f))
-                print("✅ Đã load dữ liệu Nhà tù từ Local File!")
         except Exception: pass
     DB_LOADED = True
 
 async def save_cloud_db(bot):
     global DB_MESSAGE_ID
-    # Lưu xuống ổ cứng local
+    # Lưu xuống ổ cứng local dự phòng
     try:
         with open(DATA_FILE, "w", encoding="utf-8") as f:
             json.dump(JAIL_DATA, f, indent=4)
     except Exception: pass
 
-    # Lưu lên Discord Kênh Nhà Tù để làm Cloud Database
-    channel = bot.get_channel(CHANNEL_NHA_TU)
-    if not channel: return
+    # Lưu lên Discord Kênh Ẩn
+    db_channel = await get_db_channel(bot)
+    if not db_channel: return
     
-    content = f"🔒 [DATABASE_NHA_TU] - Bot lưu trữ dữ liệu tự động để chống mất thông tin khi update. Vui lòng không xóa tin nhắn này!\n```json\n{json.dumps(JAIL_DATA)}\n```"
+    # Gom gọn chuỗi JSON để tiết kiệm diện tích tối đa
+    content = f"🔒 [DATABASE_NHA_TU] - Dữ liệu chống mất trí nhớ của hệ thống. KHÔNG XÓA!\n```json\n{json.dumps(JAIL_DATA)}\n```"
     
     if DB_MESSAGE_ID:
         try:
-            msg = await channel.fetch_message(DB_MESSAGE_ID)
+            msg = await db_channel.fetch_message(DB_MESSAGE_ID)
             await msg.edit(content=content)
             return
         except Exception:
             DB_MESSAGE_ID = None
     
     try:
-        async for msg in channel.history(limit=100):
+        async for msg in db_channel.history(limit=20):
             if msg.author == bot.user and "🔒 [DATABASE_NHA_TU]" in msg.content:
                 await msg.edit(content=content)
                 DB_MESSAGE_ID = msg.id
                 return
-                
-        msg = await channel.send(content)
+        msg = await db_channel.send(content)
         DB_MESSAGE_ID = msg.id
     except Exception: pass
 
@@ -132,7 +166,6 @@ class AppealView(discord.ui.View):
 def setup_nhatu(bot):
     bot.add_view(AppealView(bot))
 
-    # Khi bot bật lên, ưu tiên lấy DB từ Discord
     @bot.listen("on_ready")
     async def jail_on_ready():
         await load_cloud_db(bot)
