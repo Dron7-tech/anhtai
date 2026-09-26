@@ -335,7 +335,7 @@ async def on_ready():
 
 @bot.command()
 async def ver(ctx):
-    try: await ctx.send("🤖 Phiên bản hiện tại của bot: **0.72 (Động Cơ Cò Quay Đã Sửa Lỗi Bước Nhảy)**")
+    try: await ctx.send("🤖 Phiên bản hiện tại của bot: **0.72**")
     except Exception: pass
 
 # ==========================================
