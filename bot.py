@@ -169,7 +169,6 @@ class LuotCoQuayNga(discord.ui.View):
     def __init__(self, danh_sach, vi_tri, so_lo, vien, channel_id):
         super().__init__(timeout=None)
         self.danh_sach = danh_sach
-        # Không dùng vi_tri nữa, thay vào đó dùng so_lo và vien để tính % nổ
         self.so_lo = so_lo 
         self.vien = vien
         self.channel_id = channel_id
@@ -188,7 +187,6 @@ class LuotCoQuayNga(discord.ui.View):
             embed = interaction.message.embeds[0]
             embed.color = discord.Color.dark_red()
             
-            # Tính toán xác suất nổ dựa trên viên đạn hiện tại
             so_lo_con_lai = self.so_lo - self.vien + 1
             ty_le_chet_phan_tram = round((1 / so_lo_con_lai) * 100, 1)
             
@@ -202,8 +200,6 @@ class LuotCoQuayNga(discord.ui.View):
             except Exception: pass
             await asyncio.sleep(2.5)
 
-            # Thuật toán quay Random theo tỷ lệ
-            # random.randint(1, so_lo_con_lai) == 1 mô phỏng chính xác việc 1 viên đạn trong số các lỗ còn lại
             is_dead = (random.randint(1, so_lo_con_lai) == 1)
 
             if is_dead:
@@ -220,7 +216,7 @@ class LuotCoQuayNga(discord.ui.View):
                 nguoi_tiep = self.danh_sach[(self.vien - 1) % len(self.danh_sach)]
                 for child in self.children: child.disabled = False
                 embed.color = discord.Color.gold()
-                embed.description = f"💨 *Cạch...*\n😅 Đạn lép! {nguoi_dang_cam.mention} thở dốc, run rẩy đưa súng cho người tiếp theo.\n\n🎯 **LƯỢT {self.vien}/{self.so_lo}:**\nĐến lượt {nguoi_tiep.mention} đối mặt với tử thần!"
+                embed.description = f"💨 *Cạch...*\n😅 Đạn lép! {nguoi_dang_cam.mention} thở dốc, run rẩy truyền súng cho người tiếp theo.\n\n🎯 **LƯỢT {self.vien}/{self.so_lo}:**\nĐến lượt {nguoi_tiep.mention} đối mặt với tử thần!"
                 try: await interaction.edit_original_response(embed=embed, view=self)
                 except Exception: pass
 
@@ -234,8 +230,11 @@ class LuotCoQuayNga(discord.ui.View):
             try: await interaction.response.defer()
             except Exception: pass
             for child in self.children: child.disabled = True
+            
+            # Xóa người chơi bỏ cuộc khỏi mảng
             self.danh_sach.remove(nguoi_dang_cam)
             embed = interaction.message.embeds[0]
+            
             if len(self.danh_sach) == 1:
                 embed.color = discord.Color.green()
                 embed.description = f"🏳️ {nguoi_dang_cam.mention} đã sợ hãi vứt súng bỏ chạy!\n\n🏆 {self.danh_sach[0].mention} là người cuối cùng trụ lại và giành chiến thắng tuyệt đối!"
@@ -244,11 +243,15 @@ class LuotCoQuayNga(discord.ui.View):
                 if self.channel_id in phong_coquay: del phong_coquay[self.channel_id]
                 self.stop()
             else:
-                self.vien += 1
+                # LOẠI BỎ DÒNG TĂNG LƯỢT: Người tiếp theo bắn chính lỗ đạn đó
                 nguoi_tiep = self.danh_sach[(self.vien - 1) % len(self.danh_sach)]
                 for child in self.children: child.disabled = False
                 embed.color = discord.Color.orange()
-                embed.description = f"🏳️ {nguoi_dang_cam.mention} đã hèn nhát bỏ chạy rớt cả dép!\n\n🎯 **LƯỢT {self.vien}/{self.so_lo}:**\nSúng được nhặt lên bởi {nguoi_tiep.mention}!"
+                
+                so_lo_con_lai = self.so_lo - self.vien + 1
+                ty_le_chet_phan_tram = round((1 / so_lo_con_lai) * 100, 1)
+                
+                embed.description = f"🏳️ {nguoi_dang_cam.mention} đã hèn nhát bỏ chạy rớt cả dép!\n\n🎯 **LƯỢT {self.vien}/{self.so_lo}:**\nSúng được truyền lại cho {nguoi_tiep.mention}!\n*(Tỷ lệ đạn nổ ở lượt này vẫn là: **{ty_le_chet_phan_tram}%**)*"
                 try: await interaction.edit_original_response(embed=embed, view=self)
                 except Exception: pass
 
@@ -301,7 +304,10 @@ class LobbyCoQuayNga(discord.ui.View):
                 await asyncio.sleep(2.5)
                 view_moi = LuotCoQuayNga(self.nguoi_choi, vi_tri_dan, so_lo, 1, self.channel_id)
                 nguoi_dau = self.nguoi_choi[0]
-                embed.description = f"🎯 **LƯỢT 1/{so_lo}:**\nKhẩu súng lạnh ngắt đang được đặt vào tay {nguoi_dau.mention}!\nBóp cò hay hèn nhát bỏ cuộc?"
+                
+                ty_le_chet_phan_tram = round((1 / so_lo) * 100, 1)
+                
+                embed.description = f"🎯 **LƯỢT 1/{so_lo}:**\nKhẩu súng lạnh ngắt đang được đặt vào tay {nguoi_dau.mention}!\nBóp cò hay hèn nhát bỏ cuộc?\n*(Tỷ lệ đạn nổ ở lượt này là: **{ty_le_chet_phan_tram}%**)*"
                 try: await interaction.edit_original_response(embed=embed, view=view_moi)
                 except Exception: pass
                 self.stop()
@@ -329,7 +335,7 @@ async def on_ready():
 
 @bot.command()
 async def ver(ctx):
-    try: await ctx.send("🤖 Phiên bản hiện tại của bot: **0.71**")
+    try: await ctx.send("🤖 Phiên bản hiện tại của bot: **0.72 (Động Cơ Cò Quay Đã Sửa Lỗi Bước Nhảy)**")
     except Exception: pass
 
 # ==========================================
