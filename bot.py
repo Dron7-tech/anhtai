@@ -6,9 +6,10 @@ import random
 import asyncio
 from keep_alive import keep_alive
 
-# LIÊN KẾT VỚI FILE masoi.py
+# LIÊN KẾT VỚI FILE masoi.py VÀ CÁC MODULE KHÁC
 from masoi import phong_choi, GameMaSoi, LobbyMaSoi, tao_embed_lobby, dondep_game
 import masoi_engine
+import nhatu  # <--- DÒNG BỔ SUNG SỐ 1: Import module nhà tù
 
 intents = discord.Intents.default()
 intents.message_content = True
@@ -140,7 +141,7 @@ class NutGoiDieuKhien(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
 
-    @discord.ui.button(label="⚙️ Mở Bảng Điều Khiển", style=discord.ButtonStyle.primary, custom_id="nut_quan_ly_vinh_vien")
+    @discord.ui.button(label="⚙️ M mở Bảng Điều Khiển", style=discord.ButtonStyle.primary, custom_id="nut_quan_ly_vinh_vien")
     async def mo_bang_dieu_khien(self, interaction: discord.Interaction, button: discord.ui.Button):
         if not co_quyen_quan_ly(interaction.user):
             try: await interaction.response.send_message("❌ Bạn không có quyền truy cập!\n*(Tin nhắn này sẽ tự biến mất sau 3s)*", ephemeral=True, delete_after=3.0)
@@ -331,11 +332,11 @@ class LobbyCoQuayNga(discord.ui.View):
 @bot.event
 async def on_ready():
     bot.add_view(NutGoiDieuKhien())
-    print(f"✅ Bot {bot.user} đã sẵn sàng toàn bộ (Đồng bộ bảng và Cò quay)!")
+    print(f"✅ Bot {bot.user} đã sẵn sàng toàn bộ (Đồng bộ bảng, Cò quay và Nhà tù)!")
 
 @bot.command()
 async def ver(ctx):
-    try: await ctx.send("🤖 Phiên bản hiện tại của bot: **0.72**")
+    try: await ctx.send("🤖 Phiên bản hiện tại của bot: **0.73**")
     except Exception: pass
 
 # ==========================================
@@ -472,6 +473,9 @@ async def chon(ctx, *, danh_sach: str = ""):
             ket_qua = random.choice(cac_lua_chon)
             try: await ctx.send(f"🎲 Khỉ thần nhắm mắt chọn bừa...\n🎯 Người được chọn mặt gửi vàng chính là: **{ket_qua}** 🎉")
             except Exception: pass
+
+# <--- DÒNG BỔ SUNG SỐ 2: Khởi chạy module nhà tù
+nhatu.setup_nhatu(bot)
 
 if __name__ == "__main__":
     keep_alive()
