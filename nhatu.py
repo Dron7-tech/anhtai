@@ -20,18 +20,15 @@ async def get_db_channel(bot):
     if DB_CHANNEL_ID:
         return bot.get_channel(DB_CHANNEL_ID)
 
-    # Lấy thông tin Server từ kênh nhà tù
     jail_channel = bot.get_channel(CHANNEL_NHA_TU)
     if not jail_channel: return None
     guild = jail_channel.guild
 
-    # Tìm kênh database ẩn nếu đã có sẵn
     for channel in guild.text_channels:
         if channel.name == "database-nhatu":
             DB_CHANNEL_ID = channel.id
             return channel
 
-    # Nếu chưa có, tự động tạo kênh ẩn mới
     overwrites = {
         guild.default_role: discord.PermissionOverwrite(read_messages=False),
         guild.me: discord.PermissionOverwrite(read_messages=True, send_messages=True)
@@ -53,7 +50,6 @@ async def load_cloud_db(bot):
     global DB_MESSAGE_ID, JAIL_DATA, DB_LOADED
     if DB_LOADED: return
     
-    # Quét dữ liệu từ kênh ẩn
     db_channel = await get_db_channel(bot)
     if db_channel:
         try:
@@ -68,7 +64,6 @@ async def load_cloud_db(bot):
                     break
         except Exception: pass
 
-    # Nếu không có trên mạng, load bằng File Local
     if not DB_MESSAGE_ID and os.path.exists(DATA_FILE):
         try:
             with open(DATA_FILE, "r", encoding="utf-8") as f:
@@ -78,17 +73,14 @@ async def load_cloud_db(bot):
 
 async def save_cloud_db(bot):
     global DB_MESSAGE_ID
-    # Lưu xuống ổ cứng local dự phòng
     try:
         with open(DATA_FILE, "w", encoding="utf-8") as f:
             json.dump(JAIL_DATA, f, indent=4)
     except Exception: pass
 
-    # Lưu lên Discord Kênh Ẩn
     db_channel = await get_db_channel(bot)
     if not db_channel: return
     
-    # Gom gọn chuỗi JSON để tiết kiệm diện tích tối đa
     content = f"🔒 [DATABASE_NHA_TU] - Dữ liệu chống mất trí nhớ của hệ thống. KHÔNG XÓA!\n```json\n{json.dumps(JAIL_DATA)}\n```"
     
     if DB_MESSAGE_ID:
@@ -274,7 +266,6 @@ def setup_nhatu(bot):
         embed = discord.Embed(title="🕊️ LỆNH ĐẶC XÁ 🕊️", description=f"Quản ngục {ctx.author.mention} đã ký quyết định đặc xá cho {member.mention} trước thời hạn!", color=discord.Color.green())
         embed.set_thumbnail(url=member.display_avatar.url)
         
-        # Chỉ gửi 1 lần vào kênh gõ lệnh hiện tại
         try: await ctx.send(embed=embed)
         except Exception: pass
 
@@ -363,30 +354,43 @@ def setup_nhatu(bot):
         now = time.time()
         to_remove = []
         
+        # Bắt buộc lấy chính xác Server (Guild) từ Kênh Nhà Tù
+        jail_channel = bot.get_channel(CHANNEL_NHA_TU)
+        if not jail_channel: return
+        guild = jail_channel.guild
+        
         for uid, info in list(JAIL_DATA.items()):
             if now >= info["end_time"]:
                 to_remove.append(uid)
-                try:
-                    for guild in bot.guilds:
-                        member = guild.get_member(int(uid))
-                        if member:
-                            tu_nhan_role = guild.get_role(ROLE_TU_NHAN)
-                            if tu_nhan_role in member.roles:
-                                await member.remove_roles(tu_nhan_role)
-                            
-                            roles_to_add = [guild.get_role(r) for r in info["old_roles"] if guild.get_role(r)]
-                            if roles_to_add:
-                                await member.add_roles(*roles_to_add)
-                            
-                            jail_channel = guild.get_channel(CHANNEL_NHA_TU)
-                            if jail_channel:
-                                embed = discord.Embed(title="🕊️ LỆNH ÂN XÁ 🕊️", description=f"{member.mention} đã mãn hạn tù và được trả tự do! Hãy làm lại cuộc đời.", color=discord.Color.green())
-                                await jail_channel.send(embed=embed)
-                            break
-                except Exception as e:
-                    print(f"Lỗi ân xá cho {uid}: {e}")
+                member = guild.get_member(int(uid))
+                
+                if member:
+                    # Gỡ role Tù Nhân
+                    try:
+                        tu_nhan_role = guild.get_role(ROLE_TU_NHAN)
+                        if tu_nhan_role and tu_nhan_role in member.roles:
+                            await member.remove_roles(tu_nhan_role)
+                    except Exception as e:
+                        print(f"Lỗi gỡ role tù cho {uid}: {e}")
+                    
+                    # Trả lại Role Cũ
+                    try:
+                        roles_to_add = [guild.get_role(r) for r in info.get("old_roles", []) if guild.get_role(r)]
+                        if roles_to_add:
+                            await member.add_roles(*roles_to_add)
+                    except Exception as e:
+                        print(f"Lỗi trả role cũ cho {uid}: {e}")
+                    
+                    # Thông báo ân xá
+                    try:
+                        embed = discord.Embed(title="🕊️ LỆNH ÂN XÁ 🕊️", description=f"{member.mention} đã mãn hạn tù và được trả tự do! Hãy làm lại cuộc đời.", color=discord.Color.green())
+                        await jail_channel.send(embed=embed)
+                    except Exception: pass
         
+        # Sau khi thả xong thì xóa khỏi Database
         for uid in to_remove:
-            del JAIL_DATA[uid]
+            if uid in JAIL_DATA:
+                del JAIL_DATA[uid]
+                
         if to_remove:
             await save_cloud_db(bot)
