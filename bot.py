@@ -9,7 +9,7 @@ from keep_alive import keep_alive
 # LIÊN KẾT VỚI FILE masoi.py VÀ CÁC MODULE KHÁC
 from masoi import phong_choi, GameMaSoi, LobbyMaSoi, tao_embed_lobby, dondep_game
 import masoi_engine
-import nhatu  # <--- DÒNG BỔ SUNG SỐ 1: Import module nhà tù
+import nhatu  # Import module nhà tù
 
 intents = discord.Intents.default()
 intents.message_content = True
@@ -37,7 +37,7 @@ def doc_du_lieu(thang):
                 if isinstance(data, dict):
                     return data
         except Exception as e:
-            print(f"Lỗi đọc file dữ liệu {thang}: {e}")
+            print(f"Lỗi đọc file dữ liệu {thang}: {e}", flush=True)
             return {}
     return {}
 
@@ -46,7 +46,7 @@ def luu_du_lieu(thang, data):
         with open(lay_ten_file(thang), "w", encoding="utf-8") as f: 
             json.dump(data, f, ensure_ascii=False, indent=4)
     except Exception as e:
-        print(f"Lỗi lưu file dữ liệu {thang}: {e}")
+        print(f"Lỗi lưu file dữ liệu {thang}: {e}", flush=True)
 
 def tao_embed_bang(thang, data):
     embed = discord.Embed(title=f"📊 BẢNG DUY TRÌ SERVER - THÁNG {thang}", color=discord.Color.blue())
@@ -93,7 +93,7 @@ class BangDieuKhienBiMat(discord.ui.View):
         try: 
             await interaction.edit_original_response(content=thong_bao, view=BangDieuKhienBiMat(self.thang, data, self.tin_nhan_public))
         except Exception as e:
-            print(f"Lỗi update UI nội bộ: {e}")
+            print(f"Lỗi update UI nội bộ: {e}", flush=True)
 
     @discord.ui.button(label="2. ✅ Tick", style=discord.ButtonStyle.success)
     async def nut_da_dong(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -141,7 +141,7 @@ class NutGoiDieuKhien(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
 
-    @discord.ui.button(label="⚙️ M mở Bảng Điều Khiển", style=discord.ButtonStyle.primary, custom_id="nut_quan_ly_vinh_vien")
+    @discord.ui.button(label="⚙️ Mở Bảng Điều Khiển", style=discord.ButtonStyle.primary, custom_id="nut_quan_ly_vinh_vien")
     async def mo_bang_dieu_khien(self, interaction: discord.Interaction, button: discord.ui.Button):
         if not co_quyen_quan_ly(interaction.user):
             try: await interaction.response.send_message("❌ Bạn không có quyền truy cập!\n*(Tin nhắn này sẽ tự biến mất sau 3s)*", ephemeral=True, delete_after=3.0)
@@ -162,7 +162,7 @@ class NutGoiDieuKhien(discord.ui.View):
                 ephemeral=True
             )
         except Exception as e: 
-            print(f"Lỗi mở bảng điều khiển: {e}")
+            print(f"Lỗi mở bảng điều khiển: {e}", flush=True)
             try: await interaction.response.send_message("❌ Có lỗi xảy ra khi load dữ liệu của bảng.", ephemeral=True)
             except Exception: pass
 
@@ -232,7 +232,6 @@ class LuotCoQuayNga(discord.ui.View):
             except Exception: pass
             for child in self.children: child.disabled = True
             
-            # Xóa người chơi bỏ cuộc khỏi mảng
             self.danh_sach.remove(nguoi_dang_cam)
             embed = interaction.message.embeds[0]
             
@@ -244,7 +243,6 @@ class LuotCoQuayNga(discord.ui.View):
                 if self.channel_id in phong_coquay: del phong_coquay[self.channel_id]
                 self.stop()
             else:
-                # LOẠI BỎ DÒNG TĂNG LƯỢT: Người tiếp theo bắn chính lỗ đạn đó
                 nguoi_tiep = self.danh_sach[(self.vien - 1) % len(self.danh_sach)]
                 for child in self.children: child.disabled = False
                 embed.color = discord.Color.orange()
@@ -329,19 +327,30 @@ class LobbyCoQuayNga(discord.ui.View):
             if self.channel_id in phong_coquay: del phong_coquay[self.channel_id]
             self.stop()
 
+# ==========================================
+# CÁC SỰ KIỆN QUAN TRỌNG CỦA BOT
+# ==========================================
 @bot.event
 async def on_ready():
     bot.add_view(NutGoiDieuKhien())
-    print(f"✅ Bot {bot.user} đã sẵn sàng toàn bộ (Đồng bộ bảng, Cò quay và Nhà tù)!")
+    # Thêm flush=True để ép Console đẩy Log ngay lập tức
+    print(f"✅ Bot {bot.user} đã trực tuyến và sẵn sàng nhận lệnh!", flush=True)
 
+@bot.event
+async def on_command_error(ctx, error):
+    # Radar bắt lỗi: Nếu user gõ lệnh mà bot bị lỗi/chặn quyền, in thẳng ra Render Log
+    print(f"[RADAR BẮT LỖI] User {ctx.author} gõ '{ctx.message.content}' nhưng gặp lỗi: {error}", flush=True)
+
+# ==========================================
+# LỆNH CỦA BOT
+# ==========================================
 @bot.command()
 async def ver(ctx):
-    try: await ctx.send("🤖 Phiên bản hiện tại của bot: **0.75**")
-    except Exception: pass
+    try: 
+        await ctx.send("🤖 Phiên bản hiện tại của bot: **0.76 (Tối ưu Radar Lỗi)**")
+    except Exception as e: 
+        print(f"❌ Bot bị cấm nhắn tin trong kênh {ctx.channel.name}. Lỗi: {e}", flush=True)
 
-# ==========================================
-# LỆNH GỌI TRÒ CHƠI MA SÓI TỪ FILE masoi.py
-# ==========================================
 @bot.command()
 async def taophongmasoi(ctx):
     if ctx.channel.id in phong_choi:
@@ -354,9 +363,7 @@ async def taophongmasoi(ctx):
             phong_choi[ctx.channel.id] = game
             game.main_message = await ctx.send(embed=tao_embed_lobby(game), view=LobbyMaSoi(game))
         except Exception as e:
-            print(f"Lỗi khởi tạo phòng ma sói: {e}")
-            try: await ctx.send(f"❌ Có lỗi nội bộ khi liên kết mô-đun Ma Sói: `{e}`")
-            except Exception: pass
+            print(f"Lỗi khởi tạo phòng ma sói: {e}", flush=True)
 
 @bot.command()
 async def taophongcoquay(ctx):
@@ -474,11 +481,13 @@ async def chon(ctx, *, danh_sach: str = ""):
             try: await ctx.send(f"🎲 Khỉ thần nhắm mắt chọn bừa...\n🎯 Người được chọn mặt gửi vàng chính là: **{ket_qua}** 🎉")
             except Exception: pass
 
-# <--- DÒNG BỔ SUNG SỐ 2: Khởi chạy module nhà tù
+# Khởi chạy module nhà tù
 nhatu.setup_nhatu(bot)
 
 if __name__ == "__main__":
     keep_alive()
     token = os.environ.get("DISCORD_TOKEN")
-    if token is None: print("LỖI: Chưa cài đặt DISCORD_TOKEN trong phần Settings -> Variables and secrets!")
-    else: bot.run(token)
+    if token is None: 
+        print("LỖI: Chưa cài đặt DISCORD_TOKEN trong phần Settings -> Variables and secrets!", flush=True)
+    else: 
+        bot.run(token)
