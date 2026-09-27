@@ -398,7 +398,7 @@ def setup_nhatu(bot):
     # ==========================================
     # VÒNG LẶP KIỂM TRA THỜI HẠN VÀ TỰ ĐỘNG THẢ
     # ==========================================
-    @tasks.loop(seconds=15)
+    @tasks.loop(seconds=60)
     async def check_jail_loop():
         now = time.time()
         to_remove = []
