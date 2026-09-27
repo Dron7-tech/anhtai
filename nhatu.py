@@ -43,7 +43,7 @@ async def get_db_channel(bot):
         DB_CHANNEL_ID = new_channel.id
         return new_channel
     except Exception as e:
-        print("Lỗi tạo kênh DB:", e)
+        print(f"[DB] Lỗi tạo kênh DB: {e}")
         return None
 
 async def load_cloud_db(bot):
@@ -118,6 +118,9 @@ def is_admin(member):
             return True
     return False
 
+# ==========================================
+# LỚP GIAO DIỆN KHÁNG CÁO (ĐÃ TỐI ƯU ANTI-CRASH VÀ HIỂN THỊ)
+# ==========================================
 class AppealView(discord.ui.View):
     def __init__(self, bot):
         super().__init__(timeout=None)
@@ -127,34 +130,51 @@ class AppealView(discord.ui.View):
     async def btn_khang_cao(self, interaction: discord.Interaction, button: discord.ui.Button):
         uid_str = str(interaction.user.id)
         
-        if uid_str not in JAIL_DATA:
-            try: await interaction.response.send_message("❌ Bạn không phải là tù nhân, kháng cáo gì tầm này?", ephemeral=True)
-            except Exception: pass
-            return
+        # Bọc try-except cực kỳ nghiêm ngặt cho quá trình kháng cáo
+        try:
+            # 1. Kiểm tra tính hợp lệ
+            info = JAIL_DATA.get(uid_str)
+            if not info:
+                await interaction.response.send_message("❌ Bạn không phải là tù nhân, kháng cáo gì tầm này?", ephemeral=True)
+                return
+                
+            if info.get("appealed", False):
+                await interaction.response.send_message("❌ Bạn đã sử dụng hết quyền kháng cáo (chỉ được 1 lần duy nhất)!", ephemeral=True)
+                return
+                
+            # 2. Cập nhật DB
+            JAIL_DATA[uid_str]["appealed"] = True
+            await save_cloud_db(self.bot)
             
-        if JAIL_DATA[uid_str].get("appealed", False):
-            try: await interaction.response.send_message("❌ Bạn đã sử dụng hết quyền kháng cáo (chỉ được 1 lần duy nhất)!", ephemeral=True)
-            except Exception: pass
-            return
+            # 3. Phản hồi User
+            await interaction.response.send_message("✅ Đơn kháng cáo đã được gửi tới hội đồng quản trị!", ephemeral=True)
             
-        JAIL_DATA[uid_str]["appealed"] = True
-        await save_cloud_db(self.bot)
-        
-        try: await interaction.response.send_message("✅ Đơn kháng cáo đã được gửi tới hội đồng quản trị!", ephemeral=True)
-        except Exception: pass
-        
-        button.disabled = True
-        button.label = "Đã Kháng Cáo"
-        try: await interaction.message.edit(view=self)
-        except Exception: pass
-        
-        channel = interaction.guild.get_channel(CHANNEL_NHA_TU)
-        if channel:
-            pings = " ".join([f"<@&{r}>" for r in ADMIN_ROLES])
-            embed = discord.Embed(title="⚖️ YÊU CẦU KHÁNG CÁO", description=f"Tù nhân {interaction.user.mention} mong muốn được khoan hồng!", color=discord.Color.orange())
-            try: await channel.send(content=pings, embed=embed)
-            except Exception: pass
+            # 4. Sửa nút thành Vô hiệu hóa
+            button.disabled = True
+            button.label = "Đã Kháng Cáo"
+            await interaction.message.edit(view=self)
+            
+            # 5. Thiết kế và Gửi Embed báo cáo cho Admin
+            channel = interaction.guild.get_channel(CHANNEL_NHA_TU)
+            if channel:
+                pings = " ".join([f"<@&{r}>" for r in ADMIN_ROLES])
+                embed = discord.Embed(
+                    title="⚖️ ĐƠN XIN KHOAN HỒNG", 
+                    description=f"Phạm nhân {interaction.user.mention} đã đệ đơn xin giảm án/đặc xá!", 
+                    color=discord.Color.orange()
+                )
+                embed.add_field(name="Tội danh hiện tại", value=info.get("reason", "Không rõ"), inline=False)
+                embed.set_thumbnail(url=interaction.user.display_avatar.url)
+                embed.set_footer(text="Admin dùng lệnh !unjail @tên để duyệt đặc xá.")
+                
+                await channel.send(content=pings, embed=embed)
+                
+        except Exception as e:
+            print(f"[APPEAL] Lỗi trong quá trình kháng cáo: {e}")
 
+# ==========================================
+# KHỞI TẠO MODULE
+# ==========================================
 def setup_nhatu(bot):
     bot.add_view(AppealView(bot))
 
@@ -165,6 +185,9 @@ def setup_nhatu(bot):
             check_jail_loop.start()
             print("✅ Vòng lặp Nhà Tù đã khởi động an toàn!")
 
+    # ==========================================
+    # LỆNH BỎ TÙ (!jail)
+    # ==========================================
     @bot.command()
     async def jail(ctx, member: discord.Member = None, thoi_gian: str = None, *, li_do: str = "Không có lý do"):
         if not is_admin(ctx.author):
@@ -188,21 +211,42 @@ def setup_nhatu(bot):
             except Exception: pass
             return
 
+        # -------------------------------------------------------------
+        # ROLE HIERARCHY BYPASS LOGIC (BỎ QUA ROLE CẤP CAO)
+        # -------------------------------------------------------------
+        bot_top_role = ctx.guild.me.top_role.position # Lấy vị trí quyền lực nhất của Bot
+        old_roles = []
+        roles_to_remove = []
+        unremovable_roles = []
+
+        for role in member.roles:
+            if role.name == "@everyone" or role.id == ROLE_TU_NHAN:
+                continue
+                
+            old_roles.append(role.id) # Lưu toàn bộ role (cả tháo được và không tháo được) vào DB
+            
+            # Nếu Role của member THẤP HƠN top role của bot -> Bot có quyền gỡ
+            if role.position < bot_top_role:
+                roles_to_remove.append(role)
+            else:
+                unremovable_roles.append(role)
+
         try:
-            old_roles = [r.id for r in member.roles if r.name != "@everyone" and r.id != ROLE_TU_NHAN]
-            roles_to_remove = [r for r in member.roles if r.name != "@everyone"]
+            # Chỉ gỡ những role nằm trong vùng phủ sóng của Bot
             if roles_to_remove:
                 await member.remove_roles(*roles_to_remove)
-            
+                
+            # Gán Role Tù nhân (Cũng phải kiểm tra xem role Tù Nhân có cao hơn Bot không)
             tu_nhan_role = ctx.guild.get_role(ROLE_TU_NHAN)
-            if tu_nhan_role:
+            if tu_nhan_role and tu_nhan_role.position < bot_top_role:
                 await member.add_roles(tu_nhan_role)
                 
         except Exception as e:
-            try: await ctx.send("❌ Không thể gỡ/gán role. Bot phải có Role được xếp vị trí CAO HƠN Role của phạm nhân mới có quyền lột đồ!")
+            print(f"[JAIL] Lỗi gỡ/gán role cho {member.display_name}: {e}")
+            try: await ctx.send("⚠️ Có lỗi khi lột đồ phạm nhân, có thể do lỗi API hoặc Bot chưa đủ quyền cao nhất. Vẫn sẽ tiến hành giam giữ logic!")
             except Exception: pass
-            return
 
+        # Lưu dữ liệu vào Cloud DB
         end_time = time.time() + duration
         JAIL_DATA[str(member.id)] = {
             "end_time": end_time,
@@ -212,22 +256,32 @@ def setup_nhatu(bot):
         }
         await save_cloud_db(bot)
 
+        # Thông báo cho Server
         embed = discord.Embed(title="🚨 LỆNH BẮT GIỮ 🚨", color=discord.Color.dark_red())
         embed.add_field(name="Tội phạm", value=member.mention, inline=True)
         embed.add_field(name="Người bắt", value=ctx.author.mention, inline=True)
         embed.add_field(name="Mức án", value=thoi_gian, inline=True)
         embed.add_field(name="Lý do", value=li_do, inline=False)
+        if unremovable_roles:
+            # Báo cáo thêm các role không lột được để Admin biết
+            unremovable_names = ", ".join([r.name for r in unremovable_roles])
+            embed.add_field(name="⚠️ Báo cáo ngục tốt", value=f"Phạm nhân có chức sắc quá lớn, không thể lột các role: {unremovable_names}", inline=False)
+            
         embed.set_thumbnail(url=member.display_avatar.url)
         embed.set_footer(text="Dùng lệnh !kiemtratu để xem thời gian mãn hạn.")
 
         try: await ctx.send(embed=embed)
-        except Exception: pass
+        except Exception as e: print(f"Lỗi gửi thông báo jail: {e}")
 
+        # Thông báo trong khu vực cách ly (Nếu lệnh không được gõ trong đó)
         jail_channel = ctx.guild.get_channel(CHANNEL_NHA_TU)
         if jail_channel and ctx.channel.id != CHANNEL_NHA_TU:
             try: await jail_channel.send(f"⛓️ Chào mừng {member.mention} đã đến với nhà đá! Mức án của ngươi là **{thoi_gian}**.")
             except Exception: pass
 
+    # ==========================================
+    # LỆNH ĐẶC XÁ (!unjail)
+    # ==========================================
     @bot.command()
     async def unjail(ctx, member: discord.Member = None):
         if not is_admin(ctx.author):
@@ -241,25 +295,36 @@ def setup_nhatu(bot):
             return
 
         uid = str(member.id)
-        if uid not in JAIL_DATA:
+        info = JAIL_DATA.get(uid)
+        if not info:
             try: await ctx.send(f"⚠️ {member.display_name} hiện đang là công dân tự do, không bị giam giữ!")
             except Exception: pass
             return
 
-        info = JAIL_DATA[uid]
+        bot_top_role = ctx.guild.me.top_role.position
         
         try:
+            # Chỉ gỡ role Tù nhân nếu bot có quyền
             tu_nhan_role = ctx.guild.get_role(ROLE_TU_NHAN)
-            if tu_nhan_role and tu_nhan_role in member.roles:
+            if tu_nhan_role and tu_nhan_role in member.roles and tu_nhan_role.position < bot_top_role:
                 await member.remove_roles(tu_nhan_role)
             
-            roles_to_add = [ctx.guild.get_role(r) for r in info.get("old_roles", []) if ctx.guild.get_role(r)]
+            # Chỉ trả lại những role mà người đó CHƯA CÓ và bot CÓ QUYỀN thao tác
+            roles_to_add = []
+            for r_id in info.get("old_roles", []):
+                r = ctx.guild.get_role(r_id)
+                if r and r not in member.roles and r.position < bot_top_role:
+                    roles_to_add.append(r)
+                    
             if roles_to_add:
                 await member.add_roles(*roles_to_add)
+                
         except Exception as e:
-            try: await ctx.send(f"⚠️ Đã xảy ra lỗi hệ thống khi gỡ/trả role: {e}")
+            print(f"[UNJAIL] Lỗi gỡ/trả role cho {member.display_name}: {e}")
+            try: await ctx.send("⚠️ Đã xảy ra lỗi hệ thống khi trả lại quần áo cho phạm nhân (Hierarchy Limit).")
             except Exception: pass
 
+        # Cập nhật Database
         del JAIL_DATA[uid]
         await save_cloud_db(bot)
 
@@ -269,8 +334,12 @@ def setup_nhatu(bot):
         try: await ctx.send(embed=embed)
         except Exception: pass
 
+    # ==========================================
+    # LỆNH KIỂM TRA THÔNG TIN (!kiemtratu)
+    # ==========================================
     @bot.command()
     async def kiemtratu(ctx, member: discord.Member = None):
+        # Admin kiểm tra người khác
         if member and member.id != ctx.author.id:
             if not is_admin(ctx.author):
                 try: await ctx.send("❌ Bạn không có quyền kiểm tra hồ sơ tù nhân của người khác!")
@@ -278,14 +347,13 @@ def setup_nhatu(bot):
                 return
                 
             uid = str(member.id)
-            if uid not in JAIL_DATA:
+            info = JAIL_DATA.get(uid)
+            if not info:
                 try: await ctx.send(f"✅ {member.display_name} hiện không có trong danh sách đen!")
                 except Exception: pass
                 return
                 
-            info = JAIL_DATA[uid]
             remaining = int(info["end_time"] - time.time())
-            
             if remaining <= 0:
                 try: await ctx.send(f"🕊️ Mức án của {member.display_name} đã hết! Hệ thống đang chuẩn bị thả người.")
                 except Exception: pass
@@ -295,16 +363,15 @@ def setup_nhatu(bot):
             h, m = divmod(m, 60)
             d, h = divmod(h, 24)
             
-            time_str = ""
-            if d > 0: time_str += f"{d} ngày "
-            if h > 0: time_str += f"{h} giờ "
-            if m > 0: time_str += f"{m} phút "
-            if s > 0: time_str += f"{s} giây"
+            time_str = f"{d} ngày " if d > 0 else ""
+            time_str += f"{h} giờ " if h > 0 else ""
+            time_str += f"{m} phút " if m > 0 else ""
+            time_str += f"{s} giây" if s > 0 else ""
             
             appealed_status = "Đã sử dụng" if info.get("appealed", False) else "Chưa sử dụng"
             
             embed = discord.Embed(title=f"⏳ HỒ SƠ ÁN PHẠT: {member.display_name}", color=discord.Color.dark_grey())
-            embed.add_field(name="Lý do phạm tội", value=info["reason"], inline=False)
+            embed.add_field(name="Lý do phạm tội", value=info.get("reason", "Không rõ"), inline=False)
             embed.add_field(name="Thời gian còn lại", value=f"**{time_str.strip()}**", inline=False)
             embed.add_field(name="Quyền kháng cáo", value=appealed_status, inline=False)
             
@@ -312,15 +379,16 @@ def setup_nhatu(bot):
             except Exception: pass
             return
 
+        # Tù nhân tự kiểm tra bản thân
         uid = str(ctx.author.id)
-        if uid not in JAIL_DATA:
+        info = JAIL_DATA.get(uid)
+        
+        if not info:
             try: await ctx.send("✅ Bạn đang là công dân lương thiện, không vướng bận lao lý!")
             except Exception: pass
             return
             
-        info = JAIL_DATA[uid]
         remaining = int(info["end_time"] - time.time())
-        
         if remaining <= 0:
             try: await ctx.send("🕊️ Mức án của bạn đã hết! Đang chờ lính canh mở cửa...")
             except Exception: pass
@@ -330,17 +398,16 @@ def setup_nhatu(bot):
         h, m = divmod(m, 60)
         d, h = divmod(h, 24)
         
-        time_str = ""
-        if d > 0: time_str += f"{d} ngày "
-        if h > 0: time_str += f"{h} giờ "
-        if m > 0: time_str += f"{m} phút "
-        if s > 0: time_str += f"{s} giây"
+        time_str = f"{d} ngày " if d > 0 else ""
+        time_str += f"{h} giờ " if h > 0 else ""
+        time_str += f"{m} phút " if m > 0 else ""
+        time_str += f"{s} giây" if s > 0 else ""
         
         da_khang_cao = info.get("appealed", False)
         appealed_status = "Đã dùng (Hết quyền)" if da_khang_cao else "Còn 1 lần"
         
         embed = discord.Embed(title="⏳ THÔNG TIN ÁN PHẠT", color=discord.Color.dark_grey())
-        embed.add_field(name="Lý do phạm tội", value=info["reason"], inline=False)
+        embed.add_field(name="Lý do phạm tội", value=info.get("reason", "Không rõ"), inline=False)
         embed.add_field(name="Thời gian còn lại", value=f"**{time_str.strip()}**", inline=False)
         embed.add_field(name="Trạng thái kháng cáo", value=appealed_status, inline=False)
         
@@ -349,6 +416,9 @@ def setup_nhatu(bot):
         try: await ctx.send(embed=embed, view=view_to_send)
         except Exception: pass
 
+    # ==========================================
+    # VÒNG LẶP KIỂM TRA THỜI HẠN VÀ TỰ ĐỘNG THẢ
+    # ==========================================
     @tasks.loop(seconds=15)
     async def check_jail_loop():
         now = time.time()
@@ -358,32 +428,39 @@ def setup_nhatu(bot):
         jail_channel = bot.get_channel(CHANNEL_NHA_TU)
         if not jail_channel: return
         guild = jail_channel.guild
+        bot_top_role = guild.me.top_role.position # Lấy mốc Hierarchy của Bot
         
+        # Sử dụng .get() để chống KeyError
         for uid, info in list(JAIL_DATA.items()):
-            if now >= info["end_time"]:
+            if now >= info.get("end_time", 0):
                 to_remove.append(uid)
                 member = guild.get_member(int(uid))
                 
                 if member:
-                    # Gỡ role Tù Nhân
+                    # Gỡ role Tù Nhân an toàn
                     try:
                         tu_nhan_role = guild.get_role(ROLE_TU_NHAN)
-                        if tu_nhan_role and tu_nhan_role in member.roles:
+                        if tu_nhan_role and tu_nhan_role in member.roles and tu_nhan_role.position < bot_top_role:
                             await member.remove_roles(tu_nhan_role)
                     except Exception as e:
-                        print(f"Lỗi gỡ role tù cho {uid}: {e}")
+                        print(f"[LOOP] Lỗi gỡ role tù cho {uid}: {e}")
                     
-                    # Trả lại Role Cũ
+                    # Trả lại Role Cũ an toàn (Chỉ lấy những role bot có quyền)
                     try:
-                        roles_to_add = [guild.get_role(r) for r in info.get("old_roles", []) if guild.get_role(r)]
+                        roles_to_add = []
+                        for r_id in info.get("old_roles", []):
+                            r = guild.get_role(r_id)
+                            if r and r not in member.roles and r.position < bot_top_role:
+                                roles_to_add.append(r)
+                                
                         if roles_to_add:
                             await member.add_roles(*roles_to_add)
                     except Exception as e:
-                        print(f"Lỗi trả role cũ cho {uid}: {e}")
+                        print(f"[LOOP] Lỗi trả role cũ cho {uid}: {e}")
                     
                     # Thông báo ân xá
                     try:
-                        embed = discord.Embed(title="🕊️ LỆNH ÂN XÁ 🕊️", description=f"{member.mention} đã mãn hạn tù và được trả tự do! Hãy làm lại cuộc đời.", color=discord.Color.green())
+                        embed = discord.Embed(title="🕊️ LỆNH MÃN HẠN TÙ 🕊️", description=f"{member.mention} đã thụ án xong và được trả tự do! Hãy làm lại cuộc đời.", color=discord.Color.green())
                         await jail_channel.send(embed=embed)
                     except Exception: pass
         
