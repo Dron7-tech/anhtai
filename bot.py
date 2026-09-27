@@ -219,7 +219,7 @@ async def on_command_error(ctx, error):
 
 @bot.tree.command(name="ver", description="Kiểm tra phiên bản hiện tại của hệ thống Bot")
 async def slash_ver(interaction: discord.Interaction):
-    await interaction.response.send_message("🤖 Phiên bản hiện tại: **1.0.0 (Bản Chính Thức - Sharded & Slash Base)**", ephemeral=True)
+    await interaction.response.send_message("🤖 Phiên bản hiện tại: **0.80**", ephemeral=True)
 
 @bot.tree.command(name="tungxu", description="Tung đồng xu nhân phẩm (Sấp/Ngửa)")
 async def slash_tungxu(interaction: discord.Interaction):

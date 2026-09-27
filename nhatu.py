@@ -206,8 +206,17 @@ def setup_nhatu(bot):
             print("✅ Vòng lặp Nhà Tù & SQLite DB đã khởi động an toàn!")
 
     @bot.tree.command(name="jail", description="Bắt giam một tội phạm vào nhà đá")
-    @app_commands.describe(member="Chọn người cần bắt", thoi_gian="Nhập thời gian (VD: 10m, 2h, 1d)", li_do="Lý do bắt giữ")
-    async def slash_jail(interaction: discord.Interaction, member: discord.Member, thoi_gian: str, li_do: str = "Không có lý do"):
+    @app_commands.describe(member="Chọn người cần bắt", thoi_gian="Nhập thời gian (VD: 10m, 2h, 1d)", li_do="Chọn lý do bắt giữ")
+    @app_commands.choices(li_do=[
+        app_commands.Choice(name="1. Không có lý do (Bỏ trống)", value="Không có lý do"),
+        app_commands.Choice(name="2. Spam tin nhắn / Cố tình phá rối", value="Spam tin nhắn / Cố tình phá rối"),
+        app_commands.Choice(name="3. Chửi thề / Xúc phạm thành viên", value="Chửi thề / Xúc phạm thành viên"),
+        app_commands.Choice(name="4. Vi phạm luật lệ của Server", value="Vi phạm luật lệ của Server"),
+        app_commands.Choice(name="5. Gửi link bẩn / Nội dung độc hại", value="Gửi link bẩn / Nội dung độc hại")
+    ])
+    async def slash_jail(interaction: discord.Interaction, member: discord.Member, thoi_gian: str, li_do: app_commands.Choice[str]):
+        li_do_str = li_do.value # Lấy nội dung chữ từ tùy chọn bạn vừa nhấp
+        
         if not is_admin(interaction.user):
             await interaction.response.send_message("❌ Bạn không có quyền bỏ tù người khác!", ephemeral=True)
             return
@@ -241,14 +250,14 @@ def setup_nhatu(bot):
             print(f"[JAIL] Lỗi gỡ/gán role cho {member.display_name}: {e}")
 
         end_time = time.time() + duration
-        add_jail_data(member.id, end_time, old_roles, li_do, False)
+        add_jail_data(member.id, end_time, old_roles, li_do_str, False)
         await backup_sqlite_to_cloud(bot)
 
         embed = discord.Embed(title="🚨 LỆNH BẮT GIỮ 🚨", color=discord.Color.dark_red())
         embed.add_field(name="Tội phạm", value=member.mention, inline=True)
         embed.add_field(name="Người bắt", value=interaction.user.mention, inline=True)
         embed.add_field(name="Mức án", value=thoi_gian, inline=True)
-        embed.add_field(name="Lý do", value=li_do, inline=False)
+        embed.add_field(name="Lý do", value=li_do_str, inline=False)
         if unremovable_roles:
             embed.add_field(name="⚠️ Báo cáo ngục tốt", value=f"Phạm nhân có chức sắc quá lớn, không thể lột các role: {', '.join([r.name for r in unremovable_roles])}", inline=False)
             
