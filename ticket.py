@@ -10,7 +10,6 @@ CATEGORY_ID = 1438870146516254903
 # CÁC HÀM TIỆN ÍCH DÀNH CHO TICKET
 # ==========================================
 def get_next_ticket_number(category, prefix):
-    """Quét các kênh hiện tại trong danh mục để đánh số thứ tự tiếp theo"""
     max_num = 0
     if not category: return 1
     for ch in category.text_channels:
@@ -18,8 +17,7 @@ def get_next_ticket_number(category, prefix):
             try:
                 num = int(ch.name.split("-")[-1])
                 if num > max_num: max_num = num
-            except ValueError:
-                pass
+            except ValueError: pass
     return max_num + 1
 
 # ==========================================
@@ -44,7 +42,6 @@ class TicketTypeSelect(discord.ui.Select):
             await interaction.response.send_modal(LetterModal(is_anon=False))
             return
 
-        # Xử lý: Phỏng vấn trực tiếp
         await interaction.response.send_message("⏳ Đang khởi tạo phòng phỏng vấn...", ephemeral=True)
         guild = interaction.guild
         user = interaction.user
@@ -116,7 +113,7 @@ class LetterModal(discord.ui.Modal):
         guild = interaction.guild
         category = guild.get_channel(CATEGORY_ID)
         
-        # Chỉ Admin mới được quyền xem kênh Thư này
+        # CHỈ ADMIN VÀ BOT ĐƯỢC XEM KÊNH THƯ (Người gửi hoàn toàn ẩn)
         overwrites = {
             guild.default_role: discord.PermissionOverwrite(read_messages=False),
             guild.me: discord.PermissionOverwrite(read_messages=True, send_messages=True, manage_channels=True)
@@ -140,7 +137,6 @@ class LetterModal(discord.ui.Modal):
             channel = await guild.create_text_channel(name=ch_name, category=category, overwrites=overwrites, topic=topic_str)
             embed = discord.Embed(title=f"💌 {self.tieu_de.value}", description=desc, color=discord.Color.blue())
             admin_pings = " ".join([f"<@&{r}>" for r in ADMIN_ROLES])
-            # Kênh thư chỉ dùng Direct Letter Control (Không có nút Khóa)
             await channel.send(content=admin_pings, embed=embed, view=DirectLetterControls())
             
             await interaction.edit_original_response(content="✅ Thư của bạn đã được gửi an toàn tới hệ thống Ban Quản Trị!")
@@ -159,7 +155,7 @@ class AdminReplyModal(discord.ui.Modal, title='Phản hồi thư của Member'):
 
     def __init__(self, topic_str, origin_channel_id):
         self.topic_str = topic_str or ""
-        self.origin_channel_id = origin_channel_id # Lưu ID của kênh thư gốc để đồng bộ xóa
+        self.origin_channel_id = origin_channel_id # ID kênh gốc để khóa đồng bộ xóa
         super().__init__()
 
     async def on_submit(self, interaction: discord.Interaction):
@@ -185,7 +181,7 @@ class AdminReplyModal(discord.ui.Modal, title='Phản hồi thư của Member'):
         guild = interaction.guild
         category = guild.get_channel(CATEGORY_ID)
         
-        # Chỉ người gửi và Admin mới thấy kênh Phản hồi này
+        # Chỉ Admin và Người nhận thư được xem kênh phản hồi
         overwrites = {
             guild.default_role: discord.PermissionOverwrite(read_messages=False),
             target_user: discord.PermissionOverwrite(read_messages=True, send_messages=True, attach_files=True),
@@ -200,14 +196,14 @@ class AdminReplyModal(discord.ui.Modal, title='Phản hồi thư của Member'):
         ch_name = f"{prefix}{letter_id}"
         
         try:
-            # Gắn link ID liên kết vào Topic để 2 kênh nhận diện nhau khi xóa
+            # Gắn link kết nối 2 chiều vào Topic
             ch = await guild.create_text_channel(name=ch_name, category=category, overwrites=overwrites, topic=f"ReplyTicket của {target_user.id} - Linked:{self.origin_channel_id}")
             embed = discord.Embed(title="📬 THƯ PHẢN HỒI TỪ BAN QUẢN TRỊ", description=self.noi_dung.value, color=discord.Color.green())
-            await ch.send(content=f"Chào {target_user.mention}, bạn có một phản hồi mới từ BQT:", embed=embed, view=ActiveInterviewControls())
+            await ch.send(content=f"Chào {target_user.mention}, bạn có một phản hồi mới từ BQT:", embed=embed, view=ReplyChannelControls())
             
             await interaction.edit_original_response(content=f"✅ Đã tạo kênh phản hồi thành công: {ch.mention}")
             
-            # Cập nhật topic của kênh thư gốc để lưu lại ID của kênh phản hồi
+            # Lưu lại ID kênh phản hồi vào kênh gốc
             new_topic = f"{self.topic_str} - ReplyLinked:{ch.id}"
             try: await interaction.channel.edit(topic=new_topic)
             except: pass
@@ -228,11 +224,10 @@ class TicketPanel(discord.ui.View):
 
     @discord.ui.button(label="Create ticket", emoji="📩", style=discord.ButtonStyle.secondary, custom_id="create_ticket_btn_main")
     async def open_ticket(self, interaction: discord.Interaction, button: discord.ui.Button):
-        # Bảng chọn sẽ tự biến mất sau 1 phút
         await interaction.response.send_message("👇 Vui lòng chọn định dạng Ticket bạn muốn tạo:", view=TicketTypeSelectView(), ephemeral=True, delete_after=60.0)
 
 # ==========================================
-# 5. CONTROL: TICKET PHỎNG VẤN ĐANG MỞ
+# 5. CONTROL: TICKET PHỎNG VẤN TRỰC TIẾP
 # ==========================================
 class ActiveInterviewControls(discord.ui.View):
     def __init__(self):
@@ -257,7 +252,6 @@ class ActiveInterviewControls(discord.ui.View):
         try:
             await interaction.channel.edit(name=f"closed-{interaction.channel.name}")
             embed = discord.Embed(title="🔒 KÊNH ĐÃ KHÓA", description=f"Kênh này đã được khóa bởi {interaction.user.mention}.\nVui lòng chọn các thao tác quản lý bên dưới.", color=discord.Color.gold())
-            # Kênh phỏng vấn và Kênh phản hồi sẽ dùng chung nút ClosedTicketControls
             await interaction.channel.send(embed=embed, view=ClosedTicketControls())
             
             self.clear_items()
@@ -272,7 +266,7 @@ class ActiveInterviewControls(discord.ui.View):
         except: pass
 
 # ==========================================
-# 6. CONTROL: KÊNH THƯ (Trực tiếp Xóa/Phản hồi)
+# 6. CONTROL: KÊNH THƯ GỐC (Bên Admin)
 # ==========================================
 class DirectLetterControls(discord.ui.View):
     def __init__(self):
@@ -285,7 +279,6 @@ class DirectLetterControls(discord.ui.View):
             await interaction.response.send_message("❌ Chỉ Ban Quản Trị mới có quyền phản hồi!", ephemeral=True, delete_after=5.0)
             return
         
-        # Nếu thư này đã có kênh phản hồi (Kiểm tra trong Topic)
         if "ReplyLinked:" in str(interaction.channel.topic):
             await interaction.response.send_message("⚠️ Thư này đã được phản hồi rồi. Bạn có thể xóa nếu đã giải quyết xong.", ephemeral=True, delete_after=5.0)
             return
@@ -324,7 +317,7 @@ class DirectLetterControls(discord.ui.View):
 
         await interaction.response.send_message("🗑️ Kênh này (và kênh phản hồi liên quan) sẽ bị xóa vĩnh viễn sau 5 giây...", ephemeral=True)
         
-        # Tự động tìm và xóa kênh Phản hồi liên kết với thư này
+        # Xóa đồng bộ kênh Phản hồi
         topic = str(interaction.channel.topic)
         if "ReplyLinked:" in topic:
             try:
@@ -338,7 +331,61 @@ class DirectLetterControls(discord.ui.View):
         except: pass
 
 # ==========================================
-# 7. CONTROL: TICKET / PHẢN HỒI ĐÃ ĐÓNG
+# 7. CONTROL: KÊNH PHẢN HỒI (Bên Người Gửi)
+# ==========================================
+class ReplyChannelControls(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
+
+    @discord.ui.button(label="📝 Xuất Transcript", style=discord.ButtonStyle.primary, custom_id="transcript_reply_btn")
+    async def transcript_ticket(self, interaction: discord.Interaction, button: discord.ui.Button):
+        is_admin = any(role.id in ADMIN_ROLES for role in getattr(interaction.user, 'roles', []))
+        if not is_admin:
+            await interaction.response.send_message("❌ Chỉ Admin mới có quyền xuất Transcript!", ephemeral=True, delete_after=5.0)
+            return
+
+        await interaction.response.defer(ephemeral=True)
+        messages = [msg async for msg in interaction.channel.history(limit=500, oldest_first=True)]
+        
+        transcript_content = f"TRANSCRIPT PHẢN HỒI: {interaction.channel.name}\n"
+        transcript_content += f"Thời gian xuất: {discord.utils.utcnow().strftime('%Y-%m-%d %H:%M:%S')} UTC\n"
+        transcript_content += "="*50 + "\n\n"
+        
+        for msg in messages:
+            time_str = msg.created_at.strftime('%Y-%m-%d %H:%M:%S')
+            transcript_content += f"[{time_str}] {msg.author.display_name}: {msg.clean_content}\n"
+            if msg.attachments:
+                for att in msg.attachments: transcript_content += f"    [Đính kèm]: {att.url}\n"
+
+        file = discord.File(io.BytesIO(transcript_content.encode('utf-8')), filename=f"transcript-{interaction.channel.name}.txt")
+        await interaction.followup.send("✅ Dữ liệu Transcript đã được trích xuất:", file=file, ephemeral=True)
+
+    @discord.ui.button(label="🗑️ Xóa Kênh", style=discord.ButtonStyle.danger, custom_id="delete_reply_btn")
+    async def delete_channel(self, interaction: discord.Interaction, button: discord.ui.Button):
+        is_admin = any(role.id in ADMIN_ROLES for role in getattr(interaction.user, 'roles', []))
+        topic = str(interaction.channel.topic)
+        is_creator = str(interaction.user.id) in topic
+        
+        if not is_admin and not is_creator:
+            await interaction.response.send_message("❌ Bạn không có quyền xóa!", ephemeral=True, delete_after=5.0)
+            return
+
+        await interaction.response.send_message("🗑️ Kênh này (và Thư gốc bên phía Admin) sẽ bị xóa vĩnh viễn sau 5 giây...", ephemeral=True)
+        
+        # Xóa đồng bộ kênh Thư gốc
+        if "Linked:" in topic:
+            try:
+                origin_ch_id = int(topic.split("Linked:")[-1])
+                origin_ch = interaction.guild.get_channel(origin_ch_id)
+                if origin_ch: await origin_ch.delete()
+            except: pass
+
+        await asyncio.sleep(5)
+        try: await interaction.channel.delete()
+        except: pass
+
+# ==========================================
+# 8. CONTROL: TICKET PHỎNG VẤN ĐÃ ĐÓNG
 # ==========================================
 class ClosedTicketControls(discord.ui.View):
     def __init__(self):
@@ -377,27 +424,19 @@ class ClosedTicketControls(discord.ui.View):
             await interaction.response.send_message("❌ Bạn không có quyền xóa!", ephemeral=True, delete_after=5.0)
             return
 
-        await interaction.response.send_message("🗑️ Kênh này (và kênh liên kết nếu có) sẽ bị xóa vĩnh viễn sau 5 giây...", ephemeral=True)
-        
-        # Nếu đây là kênh Phản hồi (được tạo bởi Admin) và bị Member xóa, sẽ tìm và xóa kênh Thư gốc
-        if "ReplyTicket" in topic and "Linked:" in topic:
-            try:
-                origin_ch_id = int(topic.split("Linked:")[-1])
-                origin_ch = interaction.guild.get_channel(origin_ch_id)
-                if origin_ch: await origin_ch.delete()
-            except: pass
-
+        await interaction.response.send_message("🗑️ Kênh sẽ bị xóa vĩnh viễn sau 5 giây...", ephemeral=True)
         await asyncio.sleep(5)
         try: await interaction.channel.delete()
         except: pass
 
 # ==========================================
-# 8. KHỞI TẠO SLASH COMMAND
+# 9. KHỞI TẠO SLASH COMMAND
 # ==========================================
 def setup_ticket(bot):
     bot.add_view(TicketPanel())
     bot.add_view(ActiveInterviewControls())
     bot.add_view(DirectLetterControls())
+    bot.add_view(ReplyChannelControls())
     bot.add_view(ClosedTicketControls())
 
     @bot.tree.command(name="ticket_panel", description="Tạo bảng điều khiển Mở Ticket (Dành cho Admin)")
