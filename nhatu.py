@@ -206,16 +206,9 @@ def setup_nhatu(bot):
             print("✅ Vòng lặp Nhà Tù & SQLite DB đã khởi động an toàn!")
 
     @bot.tree.command(name="jail", description="Bắt giam một tội phạm vào nhà đá")
-    @app_commands.describe(member="Chọn người cần bắt", thoi_gian="Nhập thời gian (VD: 10m, 2h, 1d)", li_do="Chọn lý do bắt giữ")
-    @app_commands.choices(li_do=[
-        app_commands.Choice(name="1. Không có lý do (Bỏ trống)", value="Không có lý do"),
-        app_commands.Choice(name="2. Spam tin nhắn / Cố tình phá rối", value="Spam tin nhắn / Cố tình phá rối"),
-        app_commands.Choice(name="3. Chửi thề / Xúc phạm thành viên", value="Chửi thề / Xúc phạm thành viên"),
-        app_commands.Choice(name="4. Vi phạm luật lệ của Server", value="Vi phạm luật lệ của Server"),
-        app_commands.Choice(name="5. Gửi link bẩn / Nội dung độc hại", value="Gửi link bẩn / Nội dung độc hại")
-    ])
-    async def slash_jail(interaction: discord.Interaction, member: discord.Member, thoi_gian: str, li_do: app_commands.Choice[str]):
-        li_do_str = li_do.value # Lấy nội dung chữ từ tùy chọn bạn vừa nhấp
+    @app_commands.describe(member="Chọn người cần bắt", thoi_gian="Nhập thời gian (VD: 10m, 2h, 1d)", li_do="Nhập lý do bắt giữ (Bắt buộc nhập)")
+    async def slash_jail(interaction: discord.Interaction, member: discord.Member, thoi_gian: str, li_do: str):
+        li_do_str = li_do # Lấy nội dung chữ Admin tự gõ
         
         if not is_admin(interaction.user):
             await interaction.response.send_message("❌ Bạn không có quyền bỏ tù người khác!", ephemeral=True)
