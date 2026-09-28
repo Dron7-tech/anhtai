@@ -443,16 +443,16 @@ def setup_ticket(bot):
             return
             
         embed = discord.Embed(
-            title="Đơn liên hợp quốc", 
-            description="""Nếu muốn report, góp ý, gửi đơn khoan hồng xoá tội, mách lẻo, hay đơn giản chỉ là muốn tâm sự với Admin,... thì hãy ghé ⁠┍《🎟️》liên-hợp-quốc.
+            title="ĐƠN LIÊN HIỆP QUỐC", 
+            description="""Nếu muốn report, góp ý, gửi đơn khoan hồng xoá tội, mách lẻo, hay đơn giản chỉ là muốn tâm sự với Admin,... thì hãy tạo đơn lên liên hiệp quốc nhé.
 
 **CÁC TÙY CHỌN HỖ TRỢ:**
-🤝 **Phỏng vấn:** Mở kênh chat 1-1 trực tiếp với Ban Quản Trị.
+🤝 **Phỏng vấn:** Mở kênh chat 1-1 trực tiếp với Admin.
 📝 **Gửi thư (Hiện danh):** Góp ý công khai tên tuổi.
 🕵️ **Gửi thư (Ẩn danh):** Thông tin người gửi hoàn toàn được bảo mật.
 
 *Vui lòng bấm nút bên dưới để tạo đơn.*""",
-            color=0x2b2d31
+            color=0x008000
         )
         embed.set_footer(text="ĐẠI ANH TÀI BOT - CÔNG - MINH - LIÊM - CHÍNH")
         
