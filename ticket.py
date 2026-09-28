@@ -454,7 +454,7 @@ def setup_ticket(bot):
 🕵️ **Gửi thư (Ẩn danh):** Thông tin người gửi hoàn toàn được bảo mật.
 
 *Vui lòng bấm nút bên dưới để tạo đơn.*""",
-            color=0x2b2d31 # Màu xám đen sang trọng, đồng bộ với nền Discord
+            color=0x57F287 # Màu xám đen sang trọng, đồng bộ với nền Discord
         )
         embed.set_footer(text="ĐẠI ANH TÀI BOT - CÔNG - MINH - LIÊM - CHÍNH")
         
