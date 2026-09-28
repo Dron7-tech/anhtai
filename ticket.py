@@ -2,6 +2,8 @@ import discord
 from discord import app_commands
 import asyncio
 import io
+import random
+import string
 
 ADMIN_ROLES = [1438895205012082812, 1438865272315445258]
 CATEGORY_ID = 1438870146516254903
@@ -19,6 +21,31 @@ def get_next_ticket_number(category, prefix):
                 if num > max_num: max_num = num
             except ValueError: pass
     return max_num + 1
+
+def get_strict_overwrites(guild, allowed_user=None, denied_user=None):
+    """Hàm Khóa Toàn Diện: Quét và cấm tấc cả Role trên Server ngoại trừ 2 Role Admin"""
+    overwrites = {
+        guild.default_role: discord.PermissionOverwrite(read_messages=False),
+        guild.me: discord.PermissionOverwrite(read_messages=True, send_messages=True, manage_channels=True)
+    }
+    
+    for role in guild.roles:
+        # Nếu là 2 role Admin -> Cấp quyền xem và gửi
+        if role.id in ADMIN_ROLES:
+            overwrites[role] = discord.PermissionOverwrite(read_messages=True, send_messages=True)
+        # Bỏ qua role bot mặc định hoặc everyone để tránh lỗi
+        elif role.id == guild.default_role.id or role.is_bot_managed() or role.is_integration():
+            continue
+        # TẤT CẢ CÁC ROLE CÒN LẠI -> KHÓA KHÔNG CHO XEM KÊNH
+        else:
+            overwrites[role] = discord.PermissionOverwrite(read_messages=False)
+            
+    if allowed_user:
+        overwrites[allowed_user] = discord.PermissionOverwrite(read_messages=True, send_messages=True, attach_files=True)
+    if denied_user:
+        overwrites[denied_user] = discord.PermissionOverwrite(read_messages=False)
+        
+    return overwrites
 
 # ==========================================
 # 1. MENU CHỌN LOẠI TICKET
@@ -62,14 +89,8 @@ class TicketTypeSelect(discord.ui.Select):
                 except: pass
                 return
 
-        overwrites = {
-            guild.default_role: discord.PermissionOverwrite(read_messages=False),
-            user: discord.PermissionOverwrite(read_messages=True, send_messages=True, attach_files=True),
-            guild.me: discord.PermissionOverwrite(read_messages=True, send_messages=True, manage_channels=True)
-        }
-        for r_id in ADMIN_ROLES:
-            role = guild.get_role(r_id)
-            if role: overwrites[role] = discord.PermissionOverwrite(read_messages=True, send_messages=True)
+        # Áp dụng Khóa Toàn Diện cho Phỏng vấn trực tiếp
+        overwrites = get_strict_overwrites(guild, allowed_user=user)
 
         try:
             num = get_next_ticket_number(category, "interview-")
@@ -113,14 +134,8 @@ class LetterModal(discord.ui.Modal):
         guild = interaction.guild
         category = guild.get_channel(CATEGORY_ID)
         
-        # CHỈ ADMIN VÀ BOT ĐƯỢC XEM KÊNH THƯ (Người gửi hoàn toàn ẩn)
-        overwrites = {
-            guild.default_role: discord.PermissionOverwrite(read_messages=False),
-            guild.me: discord.PermissionOverwrite(read_messages=True, send_messages=True, manage_channels=True)
-        }
-        for r_id in ADMIN_ROLES:
-            role = guild.get_role(r_id)
-            if role: overwrites[role] = discord.PermissionOverwrite(read_messages=True, send_messages=True)
+        # Áp dụng Khóa Toàn Diện cho Thư và khóa luôn cả ID người gửi
+        overwrites = get_strict_overwrites(guild, denied_user=interaction.user)
 
         prefix = "thu-an-danh-" if self.is_anon else "thu-hien-danh-"
         num = get_next_ticket_number(category, prefix)
@@ -155,7 +170,7 @@ class AdminReplyModal(discord.ui.Modal, title='Phản hồi thư của Member'):
 
     def __init__(self, topic_str, origin_channel_id):
         self.topic_str = topic_str or ""
-        self.origin_channel_id = origin_channel_id # ID kênh gốc để khóa đồng bộ xóa
+        self.origin_channel_id = origin_channel_id
         super().__init__()
 
     async def on_submit(self, interaction: discord.Interaction):
@@ -172,7 +187,7 @@ class AdminReplyModal(discord.ui.Modal, title='Phản hồi thư của Member'):
             target_user = None
             
         if not target_user:
-            await interaction.edit_original_response(content="❌ Lỗi: Không thể xác định được người gửi thư (Họ đã rời server hoặc tài khoản bị vô hiệu hóa).")
+            await interaction.edit_original_response(content="❌ Lỗi: Không thể xác định được người nhận (Họ đã rời server hoặc tài khoản bị vô hiệu hóa).")
             await asyncio.sleep(5)
             try: await interaction.delete_original_response()
             except: pass
@@ -181,29 +196,20 @@ class AdminReplyModal(discord.ui.Modal, title='Phản hồi thư của Member'):
         guild = interaction.guild
         category = guild.get_channel(CATEGORY_ID)
         
-        # Chỉ Admin và Người nhận thư được xem kênh phản hồi
-        overwrites = {
-            guild.default_role: discord.PermissionOverwrite(read_messages=False),
-            target_user: discord.PermissionOverwrite(read_messages=True, send_messages=True, attach_files=True),
-            guild.me: discord.PermissionOverwrite(read_messages=True, send_messages=True, manage_channels=True)
-        }
-        for r_id in ADMIN_ROLES:
-            role = guild.get_role(r_id)
-            if role: overwrites[role] = discord.PermissionOverwrite(read_messages=True, send_messages=True)
+        # Áp dụng Khóa Toàn Diện, chỉ mở khóa cho Người Nhận Thư và Admin
+        overwrites = get_strict_overwrites(guild, allowed_user=target_user)
             
         is_anon = "AnonLetter" in self.topic_str
         prefix = "phan-hoi-an-danh-" if is_anon else "phan-hoi-hien-danh-"
         ch_name = f"{prefix}{letter_id}"
         
         try:
-            # Gắn link kết nối 2 chiều vào Topic
             ch = await guild.create_text_channel(name=ch_name, category=category, overwrites=overwrites, topic=f"ReplyTicket của {target_user.id} - Linked:{self.origin_channel_id}")
             embed = discord.Embed(title="📬 THƯ PHẢN HỒI TỪ BAN QUẢN TRỊ", description=self.noi_dung.value, color=discord.Color.green())
             await ch.send(content=f"Chào {target_user.mention}, bạn có một phản hồi mới từ BQT:", embed=embed, view=ReplyChannelControls())
             
             await interaction.edit_original_response(content=f"✅ Đã tạo kênh phản hồi thành công: {ch.mention}")
             
-            # Lưu lại ID kênh phản hồi vào kênh gốc
             new_topic = f"{self.topic_str} - ReplyLinked:{ch.id}"
             try: await interaction.channel.edit(topic=new_topic)
             except: pass
@@ -227,7 +233,7 @@ class TicketPanel(discord.ui.View):
         await interaction.response.send_message("👇 Vui lòng chọn định dạng Ticket bạn muốn tạo:", view=TicketTypeSelectView(), ephemeral=True, delete_after=60.0)
 
 # ==========================================
-# 5. CONTROL: TICKET PHỎNG VẤN TRỰC TIẾP
+# 5. CONTROL: TICKET PHỎNG VẤN ĐANG MỞ
 # ==========================================
 class ActiveInterviewControls(discord.ui.View):
     def __init__(self):
@@ -317,7 +323,6 @@ class DirectLetterControls(discord.ui.View):
 
         await interaction.response.send_message("🗑️ Kênh này (và kênh phản hồi liên quan) sẽ bị xóa vĩnh viễn sau 5 giây...", ephemeral=True)
         
-        # Xóa đồng bộ kênh Phản hồi
         topic = str(interaction.channel.topic)
         if "ReplyLinked:" in topic:
             try:
@@ -372,7 +377,6 @@ class ReplyChannelControls(discord.ui.View):
 
         await interaction.response.send_message("🗑️ Kênh này (và Thư gốc bên phía Admin) sẽ bị xóa vĩnh viễn sau 5 giây...", ephemeral=True)
         
-        # Xóa đồng bộ kênh Thư gốc
         if "Linked:" in topic:
             try:
                 origin_ch_id = int(topic.split("Linked:")[-1])
