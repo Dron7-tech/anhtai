@@ -1,11 +1,13 @@
 import discord
 from discord import app_commands
 import asyncio
+import io
 
 ADMIN_ROLES = [1438895205012082812, 1438865272315445258]
+CATEGORY_ID = 1438870146516254903 # ID Danh mục chứa Ticket
 
 # ==========================================
-# 1. MENU CHỌN LOẠI TICKET (Hiện ẩn sau khi bấm nút)
+# 1. MENU CHỌN LOẠI TICKET
 # ==========================================
 class TicketTypeSelect(discord.ui.Select):
     def __init__(self):
@@ -21,32 +23,25 @@ class TicketTypeSelect(discord.ui.Select):
         guild = interaction.guild
         user = interaction.user
 
-        # Xử lý Gửi Thư Ẩn Danh (Dùng Modal Form)
         if val == "letter_anon":
             await interaction.response.send_modal(AnonymousLetterModal())
             return
 
-        # Xử lý Phỏng Vấn / Gửi Thư Hiện Danh (Tạo Kênh riêng)
         await interaction.response.defer(ephemeral=True)
         
-        category = discord.utils.get(guild.categories, name="TICKETS")
-        if not category:
-            try:
-                category = await guild.create_category("TICKETS")
-            except Exception as e:
-                await interaction.followup.send(f"❌ Lỗi tạo danh mục TICKETS: {e}", ephemeral=True)
-                return
+        category = guild.get_channel(CATEGORY_ID)
+        if not category or not isinstance(category, discord.CategoryChannel):
+            await interaction.followup.send("❌ Không tìm thấy Danh Mục Ticket. Vui lòng báo Admin kiểm tra lại CATEGORY_ID.", ephemeral=True)
+            return
 
         prefix = "interview-" if val == "interview" else "thu-"
         channel_name = f"{prefix}{user.name}"
 
-        # Kiểm tra nếu User đã có Ticket chưa đóng
         for ch in category.text_channels:
             if ch.topic and str(user.id) in ch.topic:
                 await interaction.followup.send(f"❌ Bạn đang có một ticket chưa đóng: {ch.mention}", ephemeral=True)
                 return
 
-        # Phân quyền kênh Ticket
         overwrites = {
             guild.default_role: discord.PermissionOverwrite(read_messages=False),
             user: discord.PermissionOverwrite(read_messages=True, send_messages=True, attach_files=True),
@@ -54,8 +49,7 @@ class TicketTypeSelect(discord.ui.Select):
         }
         for r_id in ADMIN_ROLES:
             role = guild.get_role(r_id)
-            if role:
-                overwrites[role] = discord.PermissionOverwrite(read_messages=True, send_messages=True)
+            if role: overwrites[role] = discord.PermissionOverwrite(read_messages=True, send_messages=True)
 
         try:
             ticket_channel = await guild.create_text_channel(
@@ -71,7 +65,7 @@ class TicketTypeSelect(discord.ui.Select):
                 color=discord.Color.green()
             )
             admin_pings = " ".join([f"<@&{r}>" for r in ADMIN_ROLES])
-            await ticket_channel.send(content=f"{user.mention} {admin_pings}", embed=embed, view=TicketControls())
+            await ticket_channel.send(content=f"{user.mention} {admin_pings}", embed=embed, view=TicketActiveControls())
             
             await interaction.followup.send(f"✅ Đã tạo ticket thành công: {ticket_channel.mention}", ephemeral=True)
         except Exception as e:
@@ -86,23 +80,13 @@ class TicketTypeSelectView(discord.ui.View):
 # 2. FORM ĐIỀN THƯ ẨN DANH (MODAL)
 # ==========================================
 class AnonymousLetterModal(discord.ui.Modal, title='Gửi Thư Ẩn Danh'):
-    tieu_de = discord.ui.TextInput(
-        label='Tiêu đề thư',
-        placeholder='Nhập tiêu đề ngắn gọn...',
-        max_length=100
-    )
-    noi_dung = discord.ui.TextInput(
-        label='Nội dung thư',
-        style=discord.TextStyle.paragraph,
-        placeholder='Nhập nội dung bạn muốn gửi ẩn danh đến BQT...',
-        required=True
-    )
+    tieu_de = discord.ui.TextInput(label='Tiêu đề thư', placeholder='Nhập tiêu đề ngắn gọn...', max_length=100)
+    noi_dung = discord.ui.TextInput(label='Nội dung thư', style=discord.TextStyle.paragraph, placeholder='Nhập nội dung bạn muốn gửi ẩn danh đến BQT...', required=True)
 
     async def on_submit(self, interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=True)
         admin_channel = discord.utils.get(interaction.guild.text_channels, name="thư-ẩn-danh")
         
-        # Tự động tạo kênh thư ẩn danh cho BQT nếu chưa có
         if not admin_channel:
             try:
                 overwrites = {
@@ -130,17 +114,14 @@ class TicketPanel(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
 
-    # Nút bấm được thiết kế giống hệt Ticket Tool
     @discord.ui.button(label="Create ticket", emoji="📩", style=discord.ButtonStyle.secondary, custom_id="create_ticket_btn_main")
     async def open_ticket(self, interaction: discord.Interaction, button: discord.ui.Button):
-        view = TicketTypeSelectView()
-        # Hiện menu chọn loại Ticket dưới dạng tin nhắn ẩn (ephemeral)
-        await interaction.response.send_message("👇 Vui lòng chọn định dạng Ticket bạn muốn tạo:", view=view, ephemeral=True)
+        await interaction.response.send_message("👇 Vui lòng chọn định dạng Ticket bạn muốn tạo:", view=TicketTypeSelectView(), ephemeral=True)
 
 # ==========================================
-# 4. NÚT ĐÓNG TICKET TRONG KÊNH ĐÃ TẠO
+# 4. TRẠNG THÁI: TICKET ĐANG MỞ
 # ==========================================
-class TicketControls(discord.ui.View):
+class TicketActiveControls(discord.ui.View):
     def __init__(self):
         super().__init__(timeout=None)
 
@@ -149,40 +130,103 @@ class TicketControls(discord.ui.View):
         is_admin = False
         if hasattr(interaction.user, 'roles'):
             is_admin = any(role.id in ADMIN_ROLES for role in interaction.user.roles)
-        is_creator = str(interaction.user.id) in (interaction.channel.topic or "")
+        
+        topic = interaction.channel.topic or ""
+        user_id_str = topic.replace("Ticket của ", "")
+        is_creator = str(interaction.user.id) == user_id_str
         
         if not is_admin and not is_creator:
             await interaction.response.send_message("❌ Bạn không có quyền đóng ticket này!", ephemeral=True)
             return
-            
-        await interaction.response.send_message("🔒 Kênh sẽ bị xóa sau 5 giây...")
-        await asyncio.sleep(5)
-        try:
-            await interaction.channel.delete()
+
+        await interaction.response.defer()
+        
+        # Khóa quyền gửi tin nhắn của người tạo Ticket
+        if user_id_str.isdigit():
+            creator = interaction.guild.get_member(int(user_id_str))
+            if creator:
+                try: await interaction.channel.set_permissions(creator, send_messages=False, read_messages=True)
+                except: pass
+
+        # Đổi tên kênh thêm tiền tố closed
+        try: await interaction.channel.edit(name=f"closed-{interaction.channel.name}")
+        except: pass
+
+        embed = discord.Embed(title="🔒 TICKET ĐÃ ĐÓNG", description=f"Ticket này đã được đóng bởi {interaction.user.mention}.\nKênh hiện tại đã bị khóa chức năng trò chuyện.\n\nVui lòng chọn các thao tác quản lý bên dưới.", color=discord.Color.gold())
+        await interaction.followup.send(embed=embed, view=TicketClosedControls())
+
+        # Xóa các nút cũ để tránh bấm lại
+        self.clear_items()
+        try: await interaction.message.edit(view=self)
         except: pass
 
 # ==========================================
-# 5. KHỞI TẠO SLASH COMMAND
+# 5. TRẠNG THÁI: TICKET ĐÃ ĐÓNG (TRANSCRIPT & XÓA)
+# ==========================================
+class TicketClosedControls(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
+
+    @discord.ui.button(label="📝 Xuất Transcript", style=discord.ButtonStyle.primary, custom_id="transcript_ticket_btn")
+    async def transcript_ticket(self, interaction: discord.Interaction, button: discord.ui.Button):
+        is_admin = False
+        if hasattr(interaction.user, 'roles'):
+            is_admin = any(role.id in ADMIN_ROLES for role in interaction.user.roles)
+        if not is_admin:
+            await interaction.response.send_message("❌ Chỉ Admin mới có quyền xuất Transcript!", ephemeral=True)
+            return
+
+        await interaction.response.defer()
+        messages = [msg async for msg in interaction.channel.history(limit=500, oldest_first=True)]
+        
+        transcript_content = f"TRANSCRIPT CHO KÊNH: {interaction.channel.name}\n"
+        transcript_content += f"Thời gian xuất: {discord.utils.utcnow().strftime('%Y-%m-%d %H:%M:%S')} UTC\n"
+        transcript_content += "="*50 + "\n\n"
+        
+        for msg in messages:
+            time_str = msg.created_at.strftime('%Y-%m-%d %H:%M:%S')
+            transcript_content += f"[{time_str}] {msg.author.display_name}: {msg.clean_content}\n"
+            if msg.attachments:
+                for att in msg.attachments:
+                    transcript_content += f"    [Đính kèm]: {att.url}\n"
+
+        file = discord.File(io.BytesIO(transcript_content.encode('utf-8')), filename=f"transcript-{interaction.channel.name}.txt")
+        await interaction.followup.send("✅ Dữ liệu Transcript đã được trích xuất thành công:", file=file)
+
+    @discord.ui.button(label="🗑️ Xóa Ticket", style=discord.ButtonStyle.danger, custom_id="delete_ticket_btn")
+    async def delete_ticket(self, interaction: discord.Interaction, button: discord.ui.Button):
+        is_admin = False
+        if hasattr(interaction.user, 'roles'):
+            is_admin = any(role.id in ADMIN_ROLES for role in interaction.user.roles)
+        if not is_admin:
+            await interaction.response.send_message("❌ Chỉ Admin mới có quyền xóa ticket!", ephemeral=True)
+            return
+
+        await interaction.response.send_message("🗑️ Kênh sẽ bị xóa vĩnh viễn sau 5 giây...")
+        await asyncio.sleep(5)
+        try: await interaction.channel.delete()
+        except: pass
+
+# ==========================================
+# 6. KHỞI TẠO SLASH COMMAND
 # ==========================================
 def setup_ticket(bot):
-    # Đăng ký view tĩnh để nút bấm không bị liệt khi Bot khởi động lại
     bot.add_view(TicketPanel())
-    bot.add_view(TicketControls())
+    bot.add_view(TicketActiveControls())
+    bot.add_view(TicketClosedControls())
 
     @bot.tree.command(name="ticket_panel", description="Tạo bảng điều khiển Mở Ticket (Dành cho Admin)")
-    @app_commands.default_permissions(administrator=True) # Chỉ người có quyền Admin mới nhìn thấy lệnh này
+    @app_commands.default_permissions(administrator=True)
     async def slash_ticket_panel(interaction: discord.Interaction):
-        # Lớp bảo vệ thứ 2: Kiểm tra Role thủ công
         is_admin = interaction.user.guild_permissions.administrator or any(role.id in ADMIN_ROLES for role in getattr(interaction.user, 'roles', []))
         if not is_admin:
             await interaction.response.send_message("❌ Bạn không có quyền sử dụng lệnh này!", ephemeral=True)
             return
             
-        # Bảng Embed thiết kế giống Ticket Tool
         embed = discord.Embed(
-            title="Đơn liên hợp quốc", # Bạn có thể sửa tiêu đề tại đây
+            title="Đơn liên hợp quốc", 
             description="Bấm vào nút để tạo đơn gửi liên hợp quốc",
-            color=discord.Color.green() # Viền xanh lá giống Ticket Tool
+            color=discord.Color.green()
         )
         embed.set_footer(text="AnhTai Bot - Hệ thống Ticket chuyên nghiệp")
         
