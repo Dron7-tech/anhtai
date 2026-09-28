@@ -17,31 +17,26 @@ class GamePingView(discord.ui.View):
 def setup_pinggame(bot):
     @bot.tree.command(name="pingvalorant", description="Tìm đồng đội chiến Valorant")
     @app_commands.describe(
-        ma_phong="Mã phòng hoặc Riot ID của bạn",
+        ma_phong="Mã phòng của bạn",
         rank="Rank yêu cầu (VD: Đồng, Bạc, Kim Cương...)",
         so_luong="Số lượng người đang thiếu",
-        che_do="Chế độ chơi (Bỏ trống nếu không cần)"
+        ghi_chu="Ghi chú thêm (Bỏ trống nếu không cần)"
     )
-    # Tạo lựa chọn sẵn cho chế độ, user không bắt buộc phải chọn
-    @app_commands.choices(che_do=[
-        app_commands.Choice(name="Vui vẻ / Giải trí", value="Vui Vẻ"),
-        app_commands.Choice(name="Tryhard / Cày Rank", value="Tryhard")
-    ])
-    async def slash_pingvalorant(interaction: discord.Interaction, ma_phong: str, rank: str, so_luong: int, che_do: app_commands.Choice[str] = None):
+    async def slash_pingvalorant(interaction: discord.Interaction, ma_phong: str, rank: str, so_luong: int, ghi_chu: str = None):
         await interaction.response.defer()
         
-        # Xử lý phần chế độ chơi (Nếu user bỏ trống thì mặc định là tùy hứng)
-        che_do_str = che_do.value if che_do else "Bắn tùy hứng (Không yêu cầu)"
+        # Xử lý phần ghi chú (Nếu user bỏ trống thì hiển thị mặc định)
+        ghi_chu_str = ghi_chu if ghi_chu else "Không có"
         
         # Thiết kế Bảng thông tin (Embed) với màu Đỏ đặc trưng của Valorant
         embed = discord.Embed(title="🎮 TÌM ĐỒNG ĐỘI VALORANT", color=0xFA4454) 
         embed.set_thumbnail(url=interaction.user.display_avatar.url)
         
         embed.add_field(name="👑 Chủ phòng", value=interaction.user.mention, inline=False)
-        embed.add_field(name="🆔 Riot ID / Code", value=f"`{ma_phong}`", inline=True)
+        embed.add_field(name="🆔 Room Code", value=f"`{ma_phong}`", inline=True)
         embed.add_field(name="🏆 Rank yêu cầu", value=f"**{rank}**", inline=True)
         embed.add_field(name="👥 Thiếu", value=f"**{so_luong} người**", inline=True)
-        embed.add_field(name="🎯 Chế độ", value=f"**{che_do_str}**", inline=False)
+        embed.add_field(name="📝 Ghi chú", value=f"*{ghi_chu_str}*", inline=True)
         
         invite_url = None
         view = discord.ui.View() # Mặc định là không có nút
