@@ -20,13 +20,18 @@ def setup_pinggame(bot):
         ma_phong="Mã phòng của bạn",
         rank="Rank yêu cầu (VD: Đồng, Bạc, Kim Cương...)",
         so_luong="Số lượng người đang thiếu",
-        ghi_chu="Ghi chú thêm (Bỏ trống nếu không cần)"
+        ghi_chu="Gõ 'ko' hoặc '-' nếu không cần ghi chú"
     )
-    async def slash_pingvalorant(interaction: discord.Interaction, ma_phong: str, rank: str, so_luong: int, ghi_chu: str = None):
+    # Bỏ "= None" để Discord ép ô Ghi chú hiện ra ngay lập tức cùng với 3 ô kia
+    async def slash_pingvalorant(interaction: discord.Interaction, ma_phong: str, rank: str, so_luong: int, ghi_chu: str):
         await interaction.response.defer()
         
-        # Xử lý phần ghi chú (Nếu user bỏ trống thì hiển thị mặc định)
-        ghi_chu_str = ghi_chu if ghi_chu else "Không có"
+        # Xử lý thông minh: Nếu user lười, gõ các ký tự này thì bot sẽ tự hiểu là không có ghi chú
+        tu_khoa_bo_qua = ["ko", "không", "k", "none", "không có", ".", "-", " ", "nope"]
+        if ghi_chu.strip().lower() in tu_khoa_bo_qua:
+            ghi_chu_str = "Không có"
+        else:
+            ghi_chu_str = ghi_chu
         
         # Thiết kế Bảng thông tin (Embed) với màu Đỏ đặc trưng của Valorant
         embed = discord.Embed(title="🎮 TÌM ĐỒNG ĐỘI VALORANT", color=0xFA4454) 
@@ -36,7 +41,7 @@ def setup_pinggame(bot):
         embed.add_field(name="🆔 Room Code", value=f"`{ma_phong}`", inline=True)
         embed.add_field(name="🏆 Rank yêu cầu", value=f"**{rank}**", inline=True)
         embed.add_field(name="👥 Thiếu", value=f"**{so_luong} người**", inline=True)
-        embed.add_field(name="📝 Ghi chú", value=f"*{ghi_chu_str}*", inline=True)
+        embed.add_field(name="📝 Ghi chú", value=f"*{ghi_chu_str}*", inline=False)
         
         invite_url = None
         view = discord.ui.View() # Mặc định là không có nút
@@ -58,4 +63,4 @@ def setup_pinggame(bot):
             embed.set_footer(text="Chủ phòng hiện không có mặt trong kênh Voice nào.")
             
         # Đẩy thông báo lên kênh
-        await interaction.followup.send(content="🚀 Có anh em nào lên rank Valorant không, vào việc luôn!", embed=embed, view=view)
+        await interaction.followup.send(content="", embed=embed, view=view)
