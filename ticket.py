@@ -104,6 +104,7 @@ class LetterModal(discord.ui.Modal):
         guild = interaction.guild
         category = guild.get_channel(CATEGORY_ID)
         
+        # Chỉ bot và admin được quyền xem thư, người gửi (default role) không được xem
         overwrites = {
             guild.default_role: discord.PermissionOverwrite(read_messages=False),
             guild.me: discord.PermissionOverwrite(read_messages=True, send_messages=True, manage_channels=True)
@@ -113,7 +114,7 @@ class LetterModal(discord.ui.Modal):
             if role: overwrites[role] = discord.PermissionOverwrite(read_messages=True, send_messages=True)
 
         if not self.is_anon:
-            overwrites[interaction.user] = discord.PermissionOverwrite(read_messages=True, send_messages=False)
+            # SỬA LỖI: Không cấp quyền xem kênh cho người gửi để họ chỉ thấy kênh trả lời
             ch_name = f"thu-{interaction.user.name}"
             topic_str = f"PublicLetter của {interaction.user.id}"
             desc = f"**Người gửi:** {interaction.user.mention}\n\n**Nội dung:**\n{self.noi_dung.value}"
@@ -150,12 +151,19 @@ class AdminReplyModal(discord.ui.Modal, title='Phản hồi thư của Member'):
         await interaction.response.send_message("⏳ Đang gửi phản hồi...", ephemeral=True)
         try:
             uid_str = self.topic_str.split(" ")[-1]
-            target_user = interaction.guild.get_member(int(uid_str))
-        except:
+            
+            # SỬA LỖI: Dùng fetch_member để bắt buộc tìm cả những người không có trong cache bot
+            target_user = None
+            if uid_str.isdigit():
+                try:
+                    target_user = await interaction.guild.fetch_member(int(uid_str))
+                except discord.NotFound:
+                    pass
+        except Exception:
             target_user = None
             
         if not target_user:
-            await interaction.edit_original_response(content="❌ Lỗi: Không thể xác định được người gửi thư (có thể họ đã rời server).")
+            await interaction.edit_original_response(content="❌ Lỗi: Không thể xác định được người gửi thư (Họ đã rời server hoặc tài khoản bị vô hiệu hóa).")
             await asyncio.sleep(5)
             try: await interaction.delete_original_response()
             except: pass
@@ -164,6 +172,7 @@ class AdminReplyModal(discord.ui.Modal, title='Phản hồi thư của Member'):
         guild = interaction.guild
         category = guild.get_channel(CATEGORY_ID)
         
+        # Người nhận thư (kể cả vô danh hay công khai) sẽ nhận được 1 kênh riêng để xem câu trả lời
         overwrites = {
             guild.default_role: discord.PermissionOverwrite(read_messages=False),
             target_user: discord.PermissionOverwrite(read_messages=True, send_messages=True, attach_files=True),
@@ -180,8 +189,13 @@ class AdminReplyModal(discord.ui.Modal, title='Phản hồi thư của Member'):
             await ch.send(content=f"Chào {target_user.mention}, bạn có một phản hồi mới:", embed=embed, view=ActiveInterviewControls())
             
             await interaction.edit_original_response(content=f"✅ Đã tạo kênh phản hồi thành công: {ch.mention}")
+            
+            # Tùy chọn: tự động đóng/đổi tên kênh thư cũ sau khi phản hồi
+            try: await interaction.channel.edit(name=f"replied-{interaction.channel.name}")
+            except: pass
+            
         except Exception as e:
-            await interaction.edit_original_response(content=f"❌ Có lỗi: {e}")
+            await interaction.edit_original_response(content=f"❌ Có lỗi khi tạo kênh phản hồi: {e}")
             
         await asyncio.sleep(5)
         try: await interaction.delete_original_response()
@@ -266,8 +280,11 @@ class ActiveLetterControls(discord.ui.View):
             topic = interaction.channel.topic or ""
             if "PublicLetter" in topic:
                 uid = int(topic.split(" ")[-1])
-                user = interaction.guild.get_member(uid)
-                if user: await interaction.channel.set_permissions(user, read_messages=False)
+                try: 
+                    user = await interaction.guild.fetch_member(uid)
+                    if user: await interaction.channel.set_permissions(user, read_messages=False)
+                except: 
+                    pass
                     
             embed = discord.Embed(title="🔒 THƯ ĐÃ ĐÓNG", description="Kênh lưu trữ thư đã bị khóa. Vui lòng chọn thao tác quản lý.", color=discord.Color.gold())
             await interaction.channel.send(embed=embed, view=ClosedTicketControls())
@@ -311,7 +328,6 @@ class ClosedTicketControls(discord.ui.View):
                 for att in msg.attachments: transcript_content += f"    [Đính kèm]: {att.url}\n"
 
         file = discord.File(io.BytesIO(transcript_content.encode('utf-8')), filename=f"transcript-{interaction.channel.name}.txt")
-        # File transcript sẽ không tự xóa để Admin kịp tải về
         await interaction.followup.send("✅ Dữ liệu Transcript đã được trích xuất:", file=file, ephemeral=True)
 
     @discord.ui.button(label="🗑️ Xóa Kênh", style=discord.ButtonStyle.danger, custom_id="delete_btn")

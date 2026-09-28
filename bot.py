@@ -220,7 +220,7 @@ async def on_command_error(ctx, error):
 
 @bot.tree.command(name="ver", description="Kiểm tra phiên bản hiện tại của hệ thống Bot")
 async def slash_ver(interaction: discord.Interaction):
-    await interaction.response.send_message("🤖 Phiên bản hiện tại: **1.0.2 (Ticket Module Update)**", ephemeral=True)
+    await interaction.response.send_message("🤖 Phiên bản hiện tại: **0.84**", ephemeral=True)
 
 @bot.tree.command(name="help", description="Hiển thị bảng danh sách các lệnh của Bot")
 async def slash_help(interaction: discord.Interaction):
