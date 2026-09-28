@@ -22,31 +22,6 @@ def get_next_ticket_number(category, prefix):
             except ValueError: pass
     return max_num + 1
 
-def get_strict_overwrites(guild, allowed_user=None, denied_user=None):
-    """Hàm Khóa Toàn Diện: Quét và cấm tấc cả Role trên Server ngoại trừ 2 Role Admin"""
-    overwrites = {
-        guild.default_role: discord.PermissionOverwrite(read_messages=False),
-        guild.me: discord.PermissionOverwrite(read_messages=True, send_messages=True, manage_channels=True)
-    }
-    
-    for role in guild.roles:
-        # Nếu là 2 role Admin -> Cấp quyền xem và gửi
-        if role.id in ADMIN_ROLES:
-            overwrites[role] = discord.PermissionOverwrite(read_messages=True, send_messages=True)
-        # Bỏ qua role bot mặc định hoặc everyone để tránh lỗi
-        elif role.id == guild.default_role.id or role.is_bot_managed() or role.is_integration():
-            continue
-        # TẤT CẢ CÁC ROLE CÒN LẠI -> KHÓA KHÔNG CHO XEM KÊNH
-        else:
-            overwrites[role] = discord.PermissionOverwrite(read_messages=False)
-            
-    if allowed_user:
-        overwrites[allowed_user] = discord.PermissionOverwrite(read_messages=True, send_messages=True, attach_files=True)
-    if denied_user:
-        overwrites[denied_user] = discord.PermissionOverwrite(read_messages=False)
-        
-    return overwrites
-
 # ==========================================
 # 1. MENU CHỌN LOẠI TICKET
 # ==========================================
@@ -89,8 +64,14 @@ class TicketTypeSelect(discord.ui.Select):
                 except: pass
                 return
 
-        # Áp dụng Khóa Toàn Diện cho Phỏng vấn trực tiếp
-        overwrites = get_strict_overwrites(guild, allowed_user=user)
+        overwrites = {
+            guild.default_role: discord.PermissionOverwrite(read_messages=False),
+            user: discord.PermissionOverwrite(read_messages=True, send_messages=True, attach_files=True),
+            guild.me: discord.PermissionOverwrite(read_messages=True, send_messages=True, manage_channels=True)
+        }
+        for r_id in ADMIN_ROLES:
+            role = guild.get_role(r_id)
+            if role: overwrites[role] = discord.PermissionOverwrite(read_messages=True, send_messages=True)
 
         try:
             num = get_next_ticket_number(category, "interview-")
@@ -134,8 +115,16 @@ class LetterModal(discord.ui.Modal):
         guild = interaction.guild
         category = guild.get_channel(CATEGORY_ID)
         
-        # Áp dụng Khóa Toàn Diện cho Thư và khóa luôn cả ID người gửi
-        overwrites = get_strict_overwrites(guild, denied_user=interaction.user)
+        # BẢO MẬT TỐI ĐA: Ép người gửi (interaction.user) không được quyền xem kênh
+        overwrites = {
+            guild.default_role: discord.PermissionOverwrite(read_messages=False),
+            interaction.user: discord.PermissionOverwrite(read_messages=False, view_channel=False), 
+            guild.me: discord.PermissionOverwrite(read_messages=True, send_messages=True, manage_channels=True)
+        }
+        
+        for r_id in ADMIN_ROLES:
+            role = guild.get_role(r_id)
+            if role: overwrites[role] = discord.PermissionOverwrite(read_messages=True, send_messages=True)
 
         prefix = "thu-an-danh-" if self.is_anon else "thu-hien-danh-"
         num = get_next_ticket_number(category, prefix)
@@ -196,8 +185,14 @@ class AdminReplyModal(discord.ui.Modal, title='Phản hồi thư của Member'):
         guild = interaction.guild
         category = guild.get_channel(CATEGORY_ID)
         
-        # Áp dụng Khóa Toàn Diện, chỉ mở khóa cho Người Nhận Thư và Admin
-        overwrites = get_strict_overwrites(guild, allowed_user=target_user)
+        overwrites = {
+            guild.default_role: discord.PermissionOverwrite(read_messages=False),
+            target_user: discord.PermissionOverwrite(read_messages=True, send_messages=True, attach_files=True),
+            guild.me: discord.PermissionOverwrite(read_messages=True, send_messages=True, manage_channels=True)
+        }
+        for r_id in ADMIN_ROLES:
+            role = guild.get_role(r_id)
+            if role: overwrites[role] = discord.PermissionOverwrite(read_messages=True, send_messages=True)
             
         is_anon = "AnonLetter" in self.topic_str
         prefix = "phan-hoi-an-danh-" if is_anon else "phan-hoi-hien-danh-"
