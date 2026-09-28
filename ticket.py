@@ -235,18 +235,21 @@ class ActiveInterviewControls(discord.ui.View):
     @discord.ui.button(label="🔒 Khóa Kênh", style=discord.ButtonStyle.danger, custom_id="close_interview_btn")
     async def close_ticket(self, interaction: discord.Interaction, button: discord.ui.Button):
         is_admin = any(role.id in ADMIN_ROLES for role in getattr(interaction.user, 'roles', []))
-        topic = interaction.channel.topic or ""
-        is_creator = str(interaction.user.id) in topic
         
-        if not is_admin and not is_creator:
-            await interaction.response.send_message("❌ Bạn không có quyền khóa kênh này!", ephemeral=True, delete_after=5.0)
+        if not is_admin:
+            await interaction.response.send_message("❌ Chỉ Ban Quản Trị mới có quyền khóa kênh này!", ephemeral=True, delete_after=5.0)
             return
 
         await interaction.response.send_message("⏳ Đang khóa kênh...", ephemeral=True)
         
-        if is_creator and not is_admin:
-            try: await interaction.channel.set_permissions(interaction.user, send_messages=False, read_messages=True)
-            except: pass
+        # Admin bấm nút -> Bot tự động tìm người gửi để tước quyền chat
+        topic = interaction.channel.topic or ""
+        try:
+            creator_id = int(topic.split()[-1])
+            creator = interaction.guild.get_member(creator_id)
+            if creator:
+                await interaction.channel.set_permissions(creator, send_messages=False, read_messages=True)
+        except: pass
 
         try:
             await interaction.channel.edit(name=f"closed-{interaction.channel.name}")
@@ -311,7 +314,7 @@ class DirectLetterControls(discord.ui.View):
     async def delete_channel(self, interaction: discord.Interaction, button: discord.ui.Button):
         is_admin = any(role.id in ADMIN_ROLES for role in getattr(interaction.user, 'roles', []))
         if not is_admin:
-            await interaction.response.send_message("❌ Chỉ Admin mới có quyền xóa!", ephemeral=True, delete_after=5.0)
+            await interaction.response.send_message("❌ Chỉ Admin mới có quyền xóa kênh!", ephemeral=True, delete_after=5.0)
             return
 
         await interaction.response.send_message("🗑️ Kênh này (và kênh phản hồi liên quan) sẽ bị xóa vĩnh viễn sau 5 giây...", ephemeral=True)
@@ -361,15 +364,13 @@ class ReplyChannelControls(discord.ui.View):
     @discord.ui.button(label="🗑️ Xóa Kênh", style=discord.ButtonStyle.danger, custom_id="delete_reply_btn")
     async def delete_channel(self, interaction: discord.Interaction, button: discord.ui.Button):
         is_admin = any(role.id in ADMIN_ROLES for role in getattr(interaction.user, 'roles', []))
-        topic = str(interaction.channel.topic)
-        is_creator = str(interaction.user.id) in topic
-        
-        if not is_admin and not is_creator:
-            await interaction.response.send_message("❌ Bạn không có quyền xóa!", ephemeral=True, delete_after=5.0)
+        if not is_admin:
+            await interaction.response.send_message("❌ Chỉ Ban Quản Trị mới có quyền xóa kênh!", ephemeral=True, delete_after=5.0)
             return
 
         await interaction.response.send_message("🗑️ Kênh này (và Thư gốc bên phía Admin) sẽ bị xóa vĩnh viễn sau 5 giây...", ephemeral=True)
         
+        topic = str(interaction.channel.topic)
         if "Linked:" in topic:
             try:
                 origin_ch_id = int(topic.split("Linked:")[-1])
@@ -414,11 +415,8 @@ class ClosedTicketControls(discord.ui.View):
     @discord.ui.button(label="🗑️ Xóa Kênh", style=discord.ButtonStyle.danger, custom_id="delete_closed_btn")
     async def delete_channel(self, interaction: discord.Interaction, button: discord.ui.Button):
         is_admin = any(role.id in ADMIN_ROLES for role in getattr(interaction.user, 'roles', []))
-        topic = str(interaction.channel.topic)
-        is_creator = str(interaction.user.id) in topic
-        
-        if not is_admin and not is_creator:
-            await interaction.response.send_message("❌ Bạn không có quyền xóa!", ephemeral=True, delete_after=5.0)
+        if not is_admin:
+            await interaction.response.send_message("❌ Chỉ Ban Quản Trị mới có quyền xóa kênh!", ephemeral=True, delete_after=5.0)
             return
 
         await interaction.response.send_message("🗑️ Kênh sẽ bị xóa vĩnh viễn sau 5 giây...", ephemeral=True)
@@ -454,7 +452,7 @@ def setup_ticket(bot):
 🕵️ **Gửi thư (Ẩn danh):** Thông tin người gửi hoàn toàn được bảo mật.
 
 *Vui lòng bấm nút bên dưới để tạo đơn.*""",
-            color=0x57F287 # Màu xám đen sang trọng, đồng bộ với nền Discord
+            color=0x2b2d31
         )
         embed.set_footer(text="ĐẠI ANH TÀI BOT - CÔNG - MINH - LIÊM - CHÍNH")
         
