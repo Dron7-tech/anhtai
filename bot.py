@@ -222,14 +222,14 @@ async def on_command_error(ctx, error):
 
 @bot.tree.command(name="ver", description="Kiểm tra phiên bản hiện tại của hệ thống Bot")
 async def slash_ver(interaction: discord.Interaction):
-    await interaction.response.send_message("🤖 Phiên bản hiện tại: **1.0.5 (Tích hợp Ping Game Tự Động)**", ephemeral=True)
+    await interaction.response.send_message("🤖 Phiên bản hiện tại: **0.88**", ephemeral=True)
 
 @bot.tree.command(name="help", description="Hiển thị bảng danh sách các lệnh của Bot")
 async def slash_help(interaction: discord.Interaction):
     embed = discord.Embed(title="📚 BẢNG HƯỚNG DẪN SỬ DỤNG BOT", color=discord.Color.blue())
     embed.description = "Dưới đây là danh sách các lệnh Slash (/) hiện có của hệ thống. Bạn chỉ cần gõ ký tự `/` và chọn lệnh tương ứng để sử dụng."
     
-    embed.add_field(name="🎮 Tìm Trận Cùng Anh Em", value="`/pingvalorant` : Đăng bài tìm đồng đội Valorant (Tự động bắt Voice)", inline=False)
+    embed.add_field(name="🎮 Tìm Trận Cùng Anh Em", value="`/pingvalorant` : Đăng bài tìm đồng đội Valorant", inline=False)
     embed.add_field(name="🎲 Giải Trí & Tiện Ích", value="`/tungxu` : Tung đồng xu nhân phẩm (Sấp/Ngửa)\n`/chon` : Nhờ bot nhắm mắt chọn bừa 1 phương án\n`/chiabang` : Chia đội ngẫu nhiên (Ví dụ: 5v5, 2v2)", inline=False)
     embed.add_field(name="🎭 Trò Chơi (Boardgame)", value="`/taophongmasoi` : Khởi tạo sảnh chờ game Ma Sói\n`/taophongcoquay` : Khởi tạo sảnh chờ Cò Quay Nga", inline=False)
     embed.add_field(name="⚖️ Hệ Thống Nhà Tù (Admin)", value="`/jail` : Bắt giam thành viên phạm luật\n`/unjail` : Đặc xá, ân xá cho tù nhân\n`/kiemtratu` : Xem thông tin và thời gian án phạt", inline=False)
