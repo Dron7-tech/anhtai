@@ -22,6 +22,27 @@ def get_next_ticket_number(category, prefix):
             except ValueError: pass
     return max_num + 1
 
+def get_strict_overwrites(guild, allowed_user=None, denied_user=None):
+    overwrites = {
+        guild.default_role: discord.PermissionOverwrite(read_messages=False),
+        guild.me: discord.PermissionOverwrite(read_messages=True, send_messages=True, manage_channels=True)
+    }
+    
+    for role in guild.roles:
+        if role.id in ADMIN_ROLES:
+            overwrites[role] = discord.PermissionOverwrite(read_messages=True, send_messages=True)
+        elif role.id == guild.default_role.id or role.is_bot_managed() or role.is_integration():
+            continue
+        else:
+            overwrites[role] = discord.PermissionOverwrite(read_messages=False)
+            
+    if allowed_user:
+        overwrites[allowed_user] = discord.PermissionOverwrite(read_messages=True, send_messages=True, attach_files=True)
+    if denied_user:
+        overwrites[denied_user] = discord.PermissionOverwrite(read_messages=False, view_channel=False)
+        
+    return overwrites
+
 # ==========================================
 # 1. MENU CHỌN LOẠI TICKET
 # ==========================================
@@ -64,14 +85,7 @@ class TicketTypeSelect(discord.ui.Select):
                 except: pass
                 return
 
-        overwrites = {
-            guild.default_role: discord.PermissionOverwrite(read_messages=False),
-            user: discord.PermissionOverwrite(read_messages=True, send_messages=True, attach_files=True),
-            guild.me: discord.PermissionOverwrite(read_messages=True, send_messages=True, manage_channels=True)
-        }
-        for r_id in ADMIN_ROLES:
-            role = guild.get_role(r_id)
-            if role: overwrites[role] = discord.PermissionOverwrite(read_messages=True, send_messages=True)
+        overwrites = get_strict_overwrites(guild, allowed_user=user)
 
         try:
             num = get_next_ticket_number(category, "interview-")
@@ -115,16 +129,7 @@ class LetterModal(discord.ui.Modal):
         guild = interaction.guild
         category = guild.get_channel(CATEGORY_ID)
         
-        # BẢO MẬT TỐI ĐA: Ép người gửi (interaction.user) không được quyền xem kênh
-        overwrites = {
-            guild.default_role: discord.PermissionOverwrite(read_messages=False),
-            interaction.user: discord.PermissionOverwrite(read_messages=False, view_channel=False), 
-            guild.me: discord.PermissionOverwrite(read_messages=True, send_messages=True, manage_channels=True)
-        }
-        
-        for r_id in ADMIN_ROLES:
-            role = guild.get_role(r_id)
-            if role: overwrites[role] = discord.PermissionOverwrite(read_messages=True, send_messages=True)
+        overwrites = get_strict_overwrites(guild, denied_user=interaction.user)
 
         prefix = "thu-an-danh-" if self.is_anon else "thu-hien-danh-"
         num = get_next_ticket_number(category, prefix)
@@ -185,14 +190,7 @@ class AdminReplyModal(discord.ui.Modal, title='Phản hồi thư của Member'):
         guild = interaction.guild
         category = guild.get_channel(CATEGORY_ID)
         
-        overwrites = {
-            guild.default_role: discord.PermissionOverwrite(read_messages=False),
-            target_user: discord.PermissionOverwrite(read_messages=True, send_messages=True, attach_files=True),
-            guild.me: discord.PermissionOverwrite(read_messages=True, send_messages=True, manage_channels=True)
-        }
-        for r_id in ADMIN_ROLES:
-            role = guild.get_role(r_id)
-            if role: overwrites[role] = discord.PermissionOverwrite(read_messages=True, send_messages=True)
+        overwrites = get_strict_overwrites(guild, allowed_user=target_user)
             
         is_anon = "AnonLetter" in self.topic_str
         prefix = "phan-hoi-an-danh-" if is_anon else "phan-hoi-hien-danh-"
@@ -448,10 +446,17 @@ def setup_ticket(bot):
             
         embed = discord.Embed(
             title="Đơn liên hợp quốc", 
-            description="Bấm vào nút để tạo đơn gửi liên hợp quốc",
-            color=discord.Color.green()
+            description="""Nếu muốn report, góp ý, gửi đơn khoan hồng xoá tội, mách lẻo, hay đơn giản chỉ là muốn tâm sự với Admin,... thì hãy ghé ⁠┍《🎟️》liên-hợp-quốc.
+
+**CÁC TÙY CHỌN HỖ TRỢ:**
+🤝 **Phỏng vấn:** Mở kênh chat 1-1 trực tiếp với Ban Quản Trị.
+📝 **Gửi thư (Hiện danh):** Góp ý công khai tên tuổi.
+🕵️ **Gửi thư (Ẩn danh):** Thông tin người gửi hoàn toàn được bảo mật.
+
+*Vui lòng bấm nút bên dưới để tạo đơn.*""",
+            color=0x2b2d31 # Màu xám đen sang trọng, đồng bộ với nền Discord
         )
-        embed.set_footer(text="ĐẠI ANH TÀI BOT - CÔNG - MINH- LIÊM - CHÍNH")
+        embed.set_footer(text="ĐẠI ANH TÀI BOT - CÔNG - MINH - LIÊM - CHÍNH")
         
         await interaction.channel.send(embed=embed, view=TicketPanel())
         
