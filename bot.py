@@ -11,6 +11,7 @@ from masoi import phong_choi, GameMaSoi, LobbyMaSoi, tao_embed_lobby, dondep_gam
 import masoi_engine
 import nhatu
 import quanlybang
+import ticket  # MODULE TICKET MỚI
 
 intents = discord.Intents.default()
 intents.message_content = True
@@ -20,13 +21,13 @@ intents.message_content = True
 # ==========================================
 class AnhTaiBot(commands.AutoShardedBot):
     def __init__(self):
-        # AutoShardedBot tự động phân luồng mạng khi server đông người
         super().__init__(command_prefix="!", intents=intents)
 
     async def setup_hook(self):
         # 1. Khởi chạy các Module con độc lập
         nhatu.setup_nhatu(self)
         quanlybang.setup_bang(self)
+        ticket.setup_ticket(self) # Khởi chạy hệ thống Ticket
         
         # 2. Bắn toàn bộ Slash Commands lên máy chủ Discord
         await self.tree.sync()
@@ -219,7 +220,7 @@ async def on_command_error(ctx, error):
 
 @bot.tree.command(name="ver", description="Kiểm tra phiên bản hiện tại của hệ thống Bot")
 async def slash_ver(interaction: discord.Interaction):
-    await interaction.response.send_message("🤖 Phiên bản hiện tại: **0.80**", ephemeral=True)
+    await interaction.response.send_message("🤖 Phiên bản hiện tại: **1.0.2 (Ticket Module Update)**", ephemeral=True)
 
 @bot.tree.command(name="help", description="Hiển thị bảng danh sách các lệnh của Bot")
 async def slash_help(interaction: discord.Interaction):
@@ -230,9 +231,10 @@ async def slash_help(interaction: discord.Interaction):
     embed.add_field(name="🎮 Trò Chơi (Boardgame)", value="`/taophongmasoi` : Khởi tạo sảnh chờ game Ma Sói\n`/taophongcoquay` : Khởi tạo sảnh chờ Cò Quay Nga", inline=False)
     embed.add_field(name="⚖️ Hệ Thống Nhà Tù (Admin)", value="`/jail` : Bắt giam thành viên phạm luật\n`/unjail` : Đặc xá, ân xá cho tù nhân\n`/kiemtratu` : Xem thông tin và thời gian án phạt", inline=False)
     embed.add_field(name="📊 Quản Lý Bảng (Admin)", value="`/taobang` : Tạo bảng duy trì điểm danh theo tháng\n`/copybang` : Chuyển dữ liệu điểm danh sang tháng mới", inline=False)
+    embed.add_field(name="🎟️ Hệ Thống Ticket (Admin)", value="`/ticket_panel` : Gửi bảng điều khiển để member tạo Ticket", inline=False)
     embed.add_field(name="⚙️ Hệ Thống", value="`/ver` : Kiểm tra phiên bản Bot\n`/help` : Mở bảng hướng dẫn này", inline=False)
     
-    embed.set_footer(text="mọi ý tưởng, thắc mắc, lỗi của BOT vui lòng liên hệ ADMIN để báo cáo.")
+    embed.set_footer(text="Mọi ý tưởng, thắc mắc, lỗi của BOT vui lòng liên hệ ADMIN để báo cáo.")
     await interaction.response.send_message(embed=embed, ephemeral=True)
 
 @bot.tree.command(name="tungxu", description="Tung đồng xu nhân phẩm (Sấp/Ngửa)")
