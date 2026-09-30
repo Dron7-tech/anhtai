@@ -46,15 +46,13 @@ class LuotCoQuayNga(discord.ui.View):
     def __init__(self, danh_sach, vi_tri, so_lo, vien, channel_id):
         super().__init__(timeout=None)
         self.danh_sach = danh_sach
-        self.vi_tri = vi_tri
         self.so_lo = so_lo 
         self.vien = vien
         self.channel_id = channel_id
-        self.luot_nguoi = 0
 
     @discord.ui.button(label="🔫 Bóp Cò", style=discord.ButtonStyle.danger)
     async def nut_bop_co(self, interaction: discord.Interaction, button: discord.ui.Button):
-        nguoi_dang_cam = self.danh_sach[self.luot_nguoi % len(self.danh_sach)]
+        nguoi_dang_cam = self.danh_sach[(self.vien - 1) % len(self.danh_sach)]
         if interaction.user != nguoi_dang_cam:
             try: await interaction.response.send_message("❌ Tránh ra! Chưa tới lượt của bạn cầm súng!", ephemeral=True, delete_after=3.0)
             except Exception: pass
@@ -92,8 +90,7 @@ class LuotCoQuayNga(discord.ui.View):
                 self.stop()
             else:
                 self.vien += 1
-                self.luot_nguoi = (self.luot_nguoi + 1) % len(self.danh_sach)
-                nguoi_tiep = self.danh_sach[self.luot_nguoi]
+                nguoi_tiep = self.danh_sach[(self.vien - 1) % len(self.danh_sach)]
                 for child in self.children: child.disabled = False
                 embed.color = discord.Color.gold()
                 embed.description = f"💨 *Cạch...*\n😅 Đạn lép! {nguoi_dang_cam.mention} thở dốc, run rẩy truyền súng cho người tiếp theo.\n\n🎯 **LƯỢT {self.vien}/{self.so_lo}:**\nĐến lượt {nguoi_tiep.mention} đối mặt với tử thần!"
@@ -102,7 +99,7 @@ class LuotCoQuayNga(discord.ui.View):
 
     @discord.ui.button(label="🏳️ Bỏ Cuộc", style=discord.ButtonStyle.secondary)
     async def nut_bo_cuoc(self, interaction: discord.Interaction, button: discord.ui.Button):
-        nguoi_dang_cam = self.danh_sach[self.luot_nguoi % len(self.danh_sach)]
+        nguoi_dang_cam = self.danh_sach[(self.vien - 1) % len(self.danh_sach)]
         if interaction.user != nguoi_dang_cam:
             try: await interaction.response.send_message("❌ Bạn không cầm súng thì bỏ cuộc kiểu gì?", ephemeral=True, delete_after=3.0)
             except Exception: pass
@@ -122,8 +119,7 @@ class LuotCoQuayNga(discord.ui.View):
                 if self.channel_id in phong_coquay: del phong_coquay[self.channel_id]
                 self.stop()
             else:
-                self.luot_nguoi = self.luot_nguoi % len(self.danh_sach)
-                nguoi_tiep = self.danh_sach[self.luot_nguoi]
+                nguoi_tiep = self.danh_sach[(self.vien - 1) % len(self.danh_sach)]
                 for child in self.children: child.disabled = False
                 embed.color = discord.Color.orange()
                 
@@ -226,31 +222,7 @@ async def on_command_error(ctx, error):
 
 @bot.tree.command(name="ver", description="Kiểm tra phiên bản hiện tại của hệ thống Bot")
 async def slash_ver(interaction: discord.Interaction):
-    await interaction.response.send_message("🤖 Phiên bản hiện tại: **0.89**", ephemeral=True)
-
-@bot.tree.command(name="credit", description="Xem thông tin tác giả và hệ thống phát triển Bot")
-async def slash_credit(interaction: discord.Interaction):
-    embed = discord.Embed(
-        title="🌟 THÔNG TIN HỆ THỐNG - ĐẠI ANH TÀI BOT 🌟",
-        description="Bot quản lý và giải trí độc quyền được thiết kế riêng cho cộng đồng **HỘI CÁC ANH TÀI 🌸**.",
-        color=discord.Color.gold()
-    )
-    
-    if bot.user and bot.user.display_avatar:
-        embed.set_thumbnail(url=bot.user.display_avatar.url)
-        
-    embed.add_field(
-        name="👨‍💻 Tác Giả & Phát Triển",
-        value="• Tạo ra, cập nhật, bảo trì, nâng cấp hệ thống <@489462098896617513>\n• Vận hành & Quản lý: **Ban Quản Trị Hội Các Anh Tài**",
-        inline=False
-    )
-    embed.add_field(
-        name="⚙️ Công Nghệ Lõi",
-        value="• Ngôn ngữ: **Python**\n• Cơ sở dữ liệu: **SQLite3**",
-        inline=False
-    )
-    embed.set_footer(text="ĐẠI ANH TÀI BOT - CÔNG - MINH - LIÊM - CHÍNH")
-    await interaction.response.send_message(embed=embed)
+    await interaction.response.send_message("🤖 Phiên bản hiện tại: **0.88**", ephemeral=True)
 
 @bot.tree.command(name="help", description="Hiển thị bảng danh sách các lệnh của Bot")
 async def slash_help(interaction: discord.Interaction):
@@ -263,7 +235,7 @@ async def slash_help(interaction: discord.Interaction):
     embed.add_field(name="⚖️ Hệ Thống Nhà Tù (Admin)", value="`/jail` : Bắt giam thành viên phạm luật\n`/unjail` : Đặc xá, ân xá cho tù nhân\n`/kiemtratu` : Xem thông tin và thời gian án phạt", inline=False)
     embed.add_field(name="📊 Quản Lý Bảng (Admin)", value="`/taobang` : Tạo bảng duy trì điểm danh theo tháng\n`/copybang` : Chuyển dữ liệu điểm danh sang tháng mới", inline=False)
     embed.add_field(name="🎟️ Hệ Thống Ticket (Admin)", value="`/ticket_panel` : Gửi bảng điều khiển để member tạo Ticket", inline=False)
-    embed.add_field(name="⚙️ Hệ Thống", value="`/ver` : Kiểm tra phiên bản Bot\n`/credit` : Xem thông tin tác giả và cấu trúc Bot\n`/help` : Mở bảng hướng dẫn này", inline=False)
+    embed.add_field(name="⚙️ Hệ Thống", value="`/ver` : Kiểm tra phiên bản Bot\n`/help` : Mở bảng hướng dẫn này", inline=False)
     
     embed.set_footer(text="Mọi ý tưởng, thắc mắc, lỗi của BOT vui lòng liên hệ ADMIN để báo cáo.")
     await interaction.response.send_message(embed=embed, ephemeral=True)
