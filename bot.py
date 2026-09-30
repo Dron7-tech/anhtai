@@ -246,12 +246,7 @@ async def slash_credit(interaction: discord.Interaction):
     )
     embed.add_field(
         name="⚙️ Công Nghệ Lõi",
-        value="• Ngôn ngữ: **Python (`discord.py`)**\n• Kiến trúc: **AutoShardedBot** phân luồng chống nghẽn mạng\n• Cơ sở dữ liệu: **SQLite3** đồng bộ Cloud tự động",
-        inline=False
-    )
-    embed.add_field(
-        name="🧩 Các Module Độc Quyền",
-        value="• **Boardgame:** Ma Sói (34 vai trò tự động), Cò Quay Nga\n• **Gaming:** Tự động bắt kênh Voice & tạo phòng Valorant\n• **Quản trị:** Nhà Tù Tự Động, Bảng Duy Trì, Ticket Liên Hợp Quốc",
+        value="• Ngôn ngữ: **Python**\n• Cơ sở dữ liệu: **SQLite3**,
         inline=False
     )
     embed.set_footer(text="ĐẠI ANH TÀI BOT - CÔNG - MINH - LIÊM - CHÍNH")
