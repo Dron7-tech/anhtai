@@ -246,7 +246,7 @@ async def slash_credit(interaction: discord.Interaction):
     )
     embed.add_field(
         name="⚙️ Công Nghệ Lõi",
-        value="• Ngôn ngữ: **Python**\n• Cơ sở dữ liệu: **SQLite3**,
+        value="• Ngôn ngữ: **Python**\n• Cơ sở dữ liệu: **SQLite3**",
         inline=False
     )
     embed.set_footer(text="ĐẠI ANH TÀI BOT - CÔNG - MINH - LIÊM - CHÍNH")
