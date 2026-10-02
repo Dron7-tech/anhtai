@@ -39,7 +39,7 @@ def setup_trap(bot: discord.Client):
             title="⚠️️ KÊNH BẪY TỰ ĐỘNG (DO NOT MESSAGE) ⚠️",
             description=(
                 "🚫 **TUYỆT ĐỐI KHÔNG NHẮN TIN VÀO KÊNH NÀY!**\n\n"
-                "Đây là kênh bẫy (Honeypot) dùng để bắt các tài khoản bị hack tự động rải link độc hại.\n"
+                "Đây là kênh bẫy dùng để bắt các tài khoản bị hack tự động rải link độc hại.\n"
                 "⚡ Bất kỳ ai gửi tin nhắn vào kênh này sẽ bị **KICK NGAY LẬP TỨC** và **xoá toàn bộ tin nhắn gần nhất**."
             ),
             color=discord.Color.red()
