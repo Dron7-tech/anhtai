@@ -13,6 +13,7 @@ import nhatu
 import quanlybang
 import ticket  
 import pinggame # MODULE TÌM TRẬN GAME MỚI
+import trap     # MODULE KÊNH BẪY CHỐNG SPAM/HACK
 
 intents = discord.Intents.default()
 intents.message_content = True
@@ -30,6 +31,7 @@ class AnhTaiBot(commands.AutoShardedBot):
         quanlybang.setup_bang(self)
         ticket.setup_ticket(self) 
         pinggame.setup_pinggame(self) # Bật Module Ping Game
+        trap.setup_trap(self)         # Bật Module Kênh Bẫy (Trap Channel)
         
         # 2. Bắn toàn bộ Slash Commands lên máy chủ Discord
         await self.tree.sync()
@@ -255,7 +257,7 @@ async def slash_credit(interaction: discord.Interaction):
     )
     embed.add_field(
         name="🧩 Các Module Độc Quyền",
-        value="• **Boardgame:** Ma Sói (34 vai trò tự động), Cò Quay Nga\n• **Gaming:** Tự động bắt kênh Voice & tạo phòng Valorant\n• **Quản trị:** Nhà Tù Tự Động, Bảng Duy Trì, Ticket Liên Hợp Quốc",
+        value="• **Boardgame:** Ma Sói (34 vai trò tự động), Cò Quay Nga\n• **Gaming:** Tự động bắt kênh Voice & tạo phòng Valorant\n• **Quản trị:** Nhà Tù Tự Động, Bảng Duy Trì, Ticket Liên Hợp Quốc, Bẫy Chống Hack (Trap Channel)",
         inline=False
     )
     embed.set_footer(text="ĐẠI ANH TÀI BOT - CÔNG - MINH - LIÊM - CHÍNH")
@@ -269,9 +271,9 @@ async def slash_help(interaction: discord.Interaction):
     embed.add_field(name="🎮 Tìm Trận Cùng Anh Em", value="`/pingvalorant` : Đăng bài tìm đồng đội Valorant", inline=False)
     embed.add_field(name="🎲 Giải Trí & Tiện Ích", value="`/tungxu` : Tung đồng xu nhân phẩm (Sấp/Ngửa)\n`/chon` : Nhờ bot nhắm mắt chọn bừa 1 phương án\n`/chiabang` : Chia đội ngẫu nhiên (Ví dụ: 5v5, 2v2)", inline=False)
     embed.add_field(name="🎭 Trò Chơi (Boardgame)", value="`/taophongmasoi` : Khởi tạo sảnh chờ game Ma Sói\n`/taophongcoquay` : Khởi tạo sảnh chờ Cò Quay Nga", inline=False)
-    embed.add_field(name="⚖️ Hệ Thống Nhà Tù (Admin)", value="`/jail` : Bắt giam thành viên phạm luật\n`/unjail` : Đặc xá, ân xá cho tù nhân\n`/kiemtratu` : Xem thông tin và thời gian án phạt", inline=False)
+    embed.add_field(name="⚖️️ Hệ Thống Nhà Tù (Admin)", value="`/jail` : Bắt giam thành viên phạm luật\n`/unjail` : Đặc xá, ân xá cho tù nhân\n`/kiemtratu` : Xem thông tin và thời gian án phạt", inline=False)
     embed.add_field(name="📊 Quản Lý Bảng (Admin)", value="`/taobang` : Tạo bảng duy trì điểm danh theo tháng\n`/copybang` : Chuyển dữ liệu điểm danh sang tháng mới", inline=False)
-    embed.add_field(name="🎟️ Hệ Thống Ticket (Admin)", value="`/ticket_panel` : Gửi bảng điều khiển để member tạo Ticket", inline=False)
+    embed.add_field(name="🎟️ Hệ Thống Ticket & Bảo Mật (Admin)", value="`/ticket_panel` : Gửi bảng điều khiển để member tạo Ticket\n`/trap_panel` : Gửi bảng cảnh báo bẫy chống spam/hack vào kênh Trap", inline=False)
     embed.add_field(name="⚙️ Hệ Thống", value="`/ver` : Kiểm tra phiên bản Bot\n`/credit` : Xem thông tin tác giả và cấu trúc Bot\n`/help` : Mở bảng hướng dẫn này", inline=False)
     
     embed.set_footer(text="Mọi ý tưởng, thắc mắc, lỗi của BOT vui lòng liên hệ ADMIN để báo cáo.")
