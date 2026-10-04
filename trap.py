@@ -6,9 +6,8 @@ from discord import app_commands
 # ==========================================
 TRAP_CHANNEL_ID = 1555500092029538334  # ID kênh Trap (Honeypot)
 
-# ID kênh gửi thông báo rời server khi bị kick.
-# Nếu để None, bot sẽ tự động gửi vào Kênh Hệ Thống (System Channel) mặc định của Server.
-LOG_CHANNEL_ID = None  
+# ID kênh gửi thông báo rời server khi bị kick
+LOG_CHANNEL_ID = 1438874414186758216  
 
 
 def setup_trap(bot: discord.Client):
@@ -28,6 +27,12 @@ def setup_trap(bot: discord.Client):
         # Tìm kênh trap theo ID đã cấu hình
         trap_channel = bot.get_channel(TRAP_CHANNEL_ID)
         if trap_channel is None:
+            try:
+                trap_channel = await bot.fetch_channel(TRAP_CHANNEL_ID)
+            except Exception:
+                trap_channel = None
+
+        if trap_channel is None:
             await interaction.response.send_message(
                 f"❌ Không tìm thấy kênh Trap với ID `{TRAP_CHANNEL_ID}`! Vui lòng kiểm tra lại ID hoặc quyền của Bot.",
                 ephemeral=True
@@ -36,7 +41,7 @@ def setup_trap(bot: discord.Client):
 
         # Tạo bảng cảnh báo (Embed) để người thật nhìn thấy và tránh nhắn nhầm
         embed = discord.Embed(
-            title="⚠️️ KÊNH BẪY TỰ ĐỘNG (DO NOT MESSAGE) ⚠️",
+            title="⚠️ KÊNH BẪY TỰ ĐỘNG (DO NOT MESSAGE) ⚠️",
             description=(
                 "🚫 **TUYỆT ĐỐI KHÔNG NHẮN TIN VÀO KÊNH NÀY!**\n\n"
                 "Đây là kênh bẫy dùng để bắt các tài khoản bị hack tự động rải link độc hại.\n"
@@ -87,20 +92,17 @@ def setup_trap(bot: discord.Client):
             return
 
         # 4. (An toàn) Bỏ qua nếu người nhắn là Chủ Server hoặc có quyền Quản trị viên (Admin)
-        # vì Discord không cho phép Bot kick người có chức vụ cao hơn hoặc là chủ Server.
         if isinstance(message.author, discord.Member):
             if message.author.guild_permissions.administrator:
                 return
 
         # Chuẩn bị nội dung lý do bị kick theo đúng yêu cầu
-        ly_do_kick = "User đã bị kick do nhắn vào 1555500092029538334 (khả năng là nó bị hack spam link độc vào kênh =]]])"
+        ly_do_kick = f"User đã bị kick do nhắn vào <#{TRAP_CHANNEL_ID}> (khả năng là nó bị hack spam link độc vào kênh =]]])"
 
         # ==========================================
         # BƯỚC 1: XOÁ 50 TIN NHẮN GẦN NHẤT
         # ==========================================
         try:
-            # Xoá 50 tin nhắn gần nhất trong kênh Trap
-            # Điều kiện check: Không xoá tin nhắn đã được Ghim (pinned) và không xoá bảng cảnh báo của chính Bot
             await message.channel.purge(
                 limit=50,
                 check=lambda m: not m.pinned and m.author != bot.user
@@ -123,30 +125,26 @@ def setup_trap(bot: discord.Client):
             print(f"[TRAP LỖI] Lỗi khi kick {message.author}: {e}", flush=True)
 
         # ==========================================
-        # BƯỚC 3: GỬI THÔNG BÁO RỜI SERVER KÈM LÝ DO
+        # BƯỚC 3: GỬI THÔNG BÁO VÀO KÊNH 1438874414186758216
         # ==========================================
         if da_kick:
-            # Xác định kênh gửi thông báo:
-            # Ưu tiên 1: Kênh LOG_CHANNEL_ID (nếu có điền ID)
-            # Ưu tiên 2: Kênh hệ thống mặc định của Server (system_channel)
-            # Ưu tiên 3: Gửi trực tiếp vào kênh Trap nếu không có 2 kênh trên
-            kenh_thong_bao = None
-            if LOG_CHANNEL_ID is not None:
-                kenh_thong_bao = bot.get_channel(LOG_CHANNEL_ID)
+            kenh_thong_bao = message.guild.get_channel(LOG_CHANNEL_ID) or bot.get_channel(LOG_CHANNEL_ID)
             if kenh_thong_bao is None:
-                kenh_thong_bao = message.guild.system_channel
-            if kenh_thong_bao is None:
-                kenh_thong_bao = message.channel
+                try:
+                    kenh_thong_bao = await bot.fetch_channel(LOG_CHANNEL_ID)
+                except Exception as e:
+                    print(f"[TRAP LỖI] Không tìm thấy kênh thông báo {LOG_CHANNEL_ID}: {e}", flush=True)
 
-            try:
-                embed_log = discord.Embed(
-                    title="🚪 THÔNG BÁO RỜI SERVER (TRAP KICK)",
-                    description=(
-                        f"👤 **Thành viên:** {message.author.mention} (`{message.author.name}` - ID: `{message.author.id}`)\n"
-                        f"📌 **Lý do:** {ly_do_kick}"
-                    ),
-                    color=discord.Color.orange()
-                )
-                await kenh_thong_bao.send(embed=embed_log)
-            except Exception as e:
-                print(f"[TRAP LỖI] Không thể gửi thông báo rời server: {e}", flush=True)
+            if kenh_thong_bao is not None:
+                try:
+                    embed_log = discord.Embed(
+                        title="🚪 THÔNG BÁO RỜI SERVER (TRAP KICK)",
+                        description=(
+                            f"👤 **Thành viên:** {message.author.mention} (`{message.author.name}` - ID: `{message.author.id}`)\n"
+                            f"📌 **Lý do:** {ly_do_kick}"
+                        ),
+                        color=discord.Color.orange()
+                    )
+                    await kenh_thong_bao.send(embed=embed_log)
+                except Exception as e:
+                    print(f"[TRAP LỖI] Không thể gửi thông báo vào kênh {LOG_CHANNEL_ID}: {e}", flush=True)
