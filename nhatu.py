@@ -8,6 +8,7 @@ import time
 
 ROLE_TU_NHAN = 1552465079381921802
 CHANNEL_NHA_TU = 1552432404730486864
+PRIVATE_CATEGORY_ID = 1553745488577171547 # Danh mục riêng tư cần cấm chat
 ADMIN_ROLES = [1438895205012082812, 1438865272315445258]
 DB_FILE = "nhatu_database.db"
 
@@ -241,6 +242,19 @@ def setup_nhatu(bot):
             if tu_nhan_role and tu_nhan_role.position < bot_top_role: await member.add_roles(tu_nhan_role)
         except Exception as e:
             print(f"[JAIL] Lỗi gỡ/gán role cho {member.display_name}: {e}")
+            
+        # ====================================================
+        # CẤM CHAT TRONG DANH MỤC RIÊNG TƯ (NẾU CÓ TÊN)
+        # ====================================================
+        try:
+            private_category = interaction.guild.get_channel(PRIVATE_CATEGORY_ID)
+            # Kiểm tra xem member có nằm trong danh sách quyền chỉ định của danh mục không
+            if private_category and member in private_category.overwrites:
+                overwrite = private_category.overwrites_for(member)
+                overwrite.send_messages = False
+                await private_category.set_permissions(member, overwrite=overwrite)
+        except Exception as e:
+            print(f"[JAIL] Lỗi cấm chat danh mục riêng cho {member.display_name}: {e}")
 
         end_time = time.time() + duration
         add_jail_data(member.id, end_time, old_roles, li_do_str, False)
@@ -290,6 +304,21 @@ def setup_nhatu(bot):
                 if r and r not in member.roles and r.position < bot_top_role: roles_to_add.append(r)
             if roles_to_add: await member.add_roles(*roles_to_add)
         except Exception as e: print(f"[UNJAIL] Lỗi: {e}")
+        
+        # ====================================================
+        # MỞ LẠI CHAT TRONG DANH MỤC RIÊNG TƯ (NẾU CÓ TÊN)
+        # ====================================================
+        try:
+            private_category = interaction.guild.get_channel(PRIVATE_CATEGORY_ID)
+            if private_category and member in private_category.overwrites:
+                overwrite = private_category.overwrites_for(member)
+                overwrite.send_messages = None  # Reset lại quyền gửi tin nhắn mặc định của danh mục
+                if overwrite.is_empty():
+                    await private_category.set_permissions(member, overwrite=None)
+                else:
+                    await private_category.set_permissions(member, overwrite=overwrite)
+        except Exception as e:
+            print(f"[UNJAIL] Lỗi mở chat danh mục riêng cho {member.display_name}: {e}")
 
         remove_jail_data(uid_str)
         await backup_sqlite_to_cloud(bot)
@@ -379,6 +408,21 @@ def setup_nhatu(bot):
                 roles_to_add = [guild.get_role(r_id) for r_id in info.get("old_roles", []) if guild.get_role(r_id) and guild.get_role(r_id) not in member.roles and guild.get_role(r_id).position < bot_top_role]
                 if roles_to_add: await member.add_roles(*roles_to_add)
             except Exception as e: print(f"[LOOP] Lỗi trả quần áo: {e}")
+            
+            # ====================================================
+            # MỞ LẠI CHAT TRONG DANH MỤC RIÊNG TƯ KHI HẾT ÁN TÙ
+            # ====================================================
+            try:
+                private_category = guild.get_channel(PRIVATE_CATEGORY_ID)
+                if private_category and member in private_category.overwrites:
+                    overwrite = private_category.overwrites_for(member)
+                    overwrite.send_messages = None
+                    if overwrite.is_empty():
+                        await private_category.set_permissions(member, overwrite=None)
+                    else:
+                        await private_category.set_permissions(member, overwrite=overwrite)
+            except Exception as e:
+                print(f"[LOOP] Lỗi mở chat danh mục riêng cho {member.display_name}: {e}")
 
             try:
                 embed = discord.Embed(title="🕊️ LỆNH MÃN HẠN TÙ 🕊️", description=f"{member.mention} đã thụ án xong và được trả tự do! Hãy làm lại cuộc đời.", color=discord.Color.green())
