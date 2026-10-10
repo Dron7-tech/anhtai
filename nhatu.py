@@ -244,15 +244,21 @@ def setup_nhatu(bot):
             print(f"[JAIL] Lỗi gỡ/gán role cho {member.display_name}: {e}")
             
         # ====================================================
-        # CẤM CHAT TRONG DANH MỤC RIÊNG TƯ (NẾU CÓ TÊN)
+        # CẤM CHAT TRONG DANH MỤC RIÊNG TƯ (CHẮC CHẮN 100%)
         # ====================================================
         try:
             private_category = interaction.guild.get_channel(PRIVATE_CATEGORY_ID)
-            # Kiểm tra xem member có nằm trong danh sách quyền chỉ định của danh mục không
-            if private_category and member in private_category.overwrites:
-                overwrite = private_category.overwrites_for(member)
-                overwrite.send_messages = False
-                await private_category.set_permissions(member, overwrite=overwrite)
+            if private_category:
+                # 1. Khóa ở cấp độ Danh Mục
+                overwrite_cat = private_category.overwrites_for(member)
+                overwrite_cat.send_messages = False
+                await private_category.set_permissions(member, overwrite=overwrite_cat)
+                
+                # 2. Khóa trực tiếp trên từng Kênh Con (Quét sạch để đè quyền)
+                for ch in private_category.channels:
+                    overwrite_ch = ch.overwrites_for(member)
+                    overwrite_ch.send_messages = False
+                    await ch.set_permissions(member, overwrite=overwrite_ch)
         except Exception as e:
             print(f"[JAIL] Lỗi cấm chat danh mục riêng cho {member.display_name}: {e}")
 
@@ -306,17 +312,27 @@ def setup_nhatu(bot):
         except Exception as e: print(f"[UNJAIL] Lỗi: {e}")
         
         # ====================================================
-        # MỞ LẠI CHAT TRONG DANH MỤC RIÊNG TƯ (NẾU CÓ TÊN)
+        # MỞ LẠI CHAT TRONG DANH MỤC RIÊNG TƯ (Xóa cấm chat)
         # ====================================================
         try:
             private_category = interaction.guild.get_channel(PRIVATE_CATEGORY_ID)
-            if private_category and member in private_category.overwrites:
-                overwrite = private_category.overwrites_for(member)
-                overwrite.send_messages = None  # Reset lại quyền gửi tin nhắn mặc định của danh mục
-                if overwrite.is_empty():
+            if private_category:
+                # Gỡ ở Danh Mục
+                overwrite_cat = private_category.overwrites_for(member)
+                overwrite_cat.send_messages = None 
+                if overwrite_cat.is_empty():
                     await private_category.set_permissions(member, overwrite=None)
                 else:
-                    await private_category.set_permissions(member, overwrite=overwrite)
+                    await private_category.set_permissions(member, overwrite=overwrite_cat)
+                    
+                # Gỡ ở từng Kênh Con
+                for ch in private_category.channels:
+                    overwrite_ch = ch.overwrites_for(member)
+                    overwrite_ch.send_messages = None
+                    if overwrite_ch.is_empty():
+                        await ch.set_permissions(member, overwrite=None)
+                    else:
+                        await ch.set_permissions(member, overwrite=overwrite_ch)
         except Exception as e:
             print(f"[UNJAIL] Lỗi mở chat danh mục riêng cho {member.display_name}: {e}")
 
@@ -414,13 +430,17 @@ def setup_nhatu(bot):
             # ====================================================
             try:
                 private_category = guild.get_channel(PRIVATE_CATEGORY_ID)
-                if private_category and member in private_category.overwrites:
-                    overwrite = private_category.overwrites_for(member)
-                    overwrite.send_messages = None
-                    if overwrite.is_empty():
-                        await private_category.set_permissions(member, overwrite=None)
-                    else:
-                        await private_category.set_permissions(member, overwrite=overwrite)
+                if private_category:
+                    overwrite_cat = private_category.overwrites_for(member)
+                    overwrite_cat.send_messages = None
+                    if overwrite_cat.is_empty(): await private_category.set_permissions(member, overwrite=None)
+                    else: await private_category.set_permissions(member, overwrite=overwrite_cat)
+                    
+                    for ch in private_category.channels:
+                        overwrite_ch = ch.overwrites_for(member)
+                        overwrite_ch.send_messages = None
+                        if overwrite_ch.is_empty(): await ch.set_permissions(member, overwrite=None)
+                        else: await ch.set_permissions(member, overwrite=overwrite_ch)
             except Exception as e:
                 print(f"[LOOP] Lỗi mở chat danh mục riêng cho {member.display_name}: {e}")
 
